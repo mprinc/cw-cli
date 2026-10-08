@@ -51,34 +51,83 @@ _cw_completions() {
     # Determine which argument position we're completing
     local cmd="${COMP_WORDS[1]}"
 
+    # Helper: fuzzy match (case-insensitive + latin→cyrillic transliteration)
+    _cw_fuzzy_match() {
+        local query="$1"
+        shift
+        python3 -c "
+import sys
+query = sys.argv[1]
+candidates = sys.argv[2:]
+# Latin → Cyrillic mapping (Serbian)
+lat2cyr = {
+    'a':'а','b':'б','v':'в','g':'г','d':'д','đ':'ђ','e':'е','ž':'ж',
+    'z':'з','i':'и','j':'ј','k':'к','l':'л','lj':'љ','m':'м','n':'н',
+    'nj':'њ','o':'о','p':'п','r':'р','s':'с','t':'т','ć':'ћ','u':'у',
+    'f':'ф','h':'х','c':'ц','č':'ч','dž':'џ','š':'ш',
+    'dj':'ђ','zh':'ж','nj':'њ','lj':'љ','dz':'џ',
+}
+def transliterate(text):
+    result = ''
+    i = 0
+    t = text.lower()
+    while i < len(t):
+        if i+2 <= len(t) and t[i:i+2] in lat2cyr:
+            result += lat2cyr[t[i:i+2]]
+            i += 2
+        elif t[i] in lat2cyr:
+            result += lat2cyr[t[i]]
+            i += 1
+        else:
+            result += t[i]
+            i += 1
+    return result
+q_lower = query.lower()
+q_cyr = transliterate(query)
+for c in candidates:
+    c_lower = c.lower()
+    if c_lower.startswith(q_lower) or c_lower.startswith(q_cyr):
+        print(c)
+" "$query" "$@" 2>/dev/null
+    }
+
     if [ "$COMP_CWORD" -eq 2 ]; then
         # First argument after command — context names (or target for go/rename)
         case "$cmd" in
             open|close|save|history|join|windows|rename)
-                local contexts
-                contexts=$(_cw_list_contexts 2>/dev/null)
                 if [[ "$cur" == */* ]]; then
                     local ctx_name="${cur%%/*}"
-                    local windows
-                    windows=$(_cw_list_windows "$ctx_name" 2>/dev/null)
-                    COMPREPLY=( $(compgen -P "${ctx_name}/" -W "$windows" -- "${cur#*/}") )
+                    local win_query="${cur#*/}"
+                    local -a windows
+                    mapfile -t windows < <(_cw_list_windows "$ctx_name" 2>/dev/null)
+                    local -a matches
+                    mapfile -t matches < <(_cw_fuzzy_match "$win_query" "${windows[@]}")
+                    COMPREPLY=( "${matches[@]/#/${ctx_name}/}" )
                 else
-                    COMPREPLY=( $(compgen -W "$contexts" -- "$cur") )
+                    local -a contexts
+                    mapfile -t contexts < <(_cw_list_contexts 2>/dev/null)
+                    local -a matches
+                    mapfile -t matches < <(_cw_fuzzy_match "$cur" "${contexts[@]}")
+                    COMPREPLY=( "${matches[@]}" )
                 fi
                 ;;
             go)
-                # go accepts context names, context/window, AND iTerm titles
-                local contexts titles combined
-                contexts=$(_cw_list_contexts 2>/dev/null)
-                titles=$(_cw_list_iterm_titles_all 2>/dev/null)
-                combined="$contexts $titles"
                 if [[ "$cur" == */* ]]; then
                     local ctx_name="${cur%%/*}"
-                    local windows
-                    windows=$(_cw_list_windows "$ctx_name" 2>/dev/null)
-                    COMPREPLY=( $(compgen -P "${ctx_name}/" -W "$windows" -- "${cur#*/}") )
+                    local win_query="${cur#*/}"
+                    local -a windows
+                    mapfile -t windows < <(_cw_list_windows "$ctx_name" 2>/dev/null)
+                    local -a matches
+                    mapfile -t matches < <(_cw_fuzzy_match "$win_query" "${windows[@]}")
+                    COMPREPLY=( "${matches[@]/#/${ctx_name}/}" )
                 else
-                    COMPREPLY=( $(compgen -W "$combined" -- "$cur") )
+                    local -a contexts titles all_items
+                    mapfile -t contexts < <(_cw_list_contexts 2>/dev/null)
+                    mapfile -t titles < <(_cw_list_iterm_titles_all 2>/dev/null)
+                    all_items=( "${contexts[@]}" "${titles[@]}" )
+                    local -a matches
+                    mapfile -t matches < <(_cw_fuzzy_match "$cur" "${all_items[@]}")
+                    COMPREPLY=( "${matches[@]}" )
                 fi
                 ;;
             completion)
@@ -89,10 +138,11 @@ _cw_completions() {
         # Second argument — depends on command
         case "$cmd" in
             join)
-                # Complete iTerm window titles (untracked windows)
-                local titles
-                titles=$(_cw_list_iterm_titles 2>/dev/null)
-                COMPREPLY=( $(compgen -W "$titles" -- "$cur") )
+                # Complete iTerm window titles (untracked windows) with fuzzy match
+                local -a titles matches
+                mapfile -t titles < <(_cw_list_iterm_titles 2>/dev/null)
+                mapfile -t matches < <(_cw_fuzzy_match "$cur" "${titles[@]}")
+                COMPREPLY=( "${matches[@]}" )
                 ;;
         esac
     fi
