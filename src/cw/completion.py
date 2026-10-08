@@ -91,6 +91,14 @@ for c in candidates:
 " "$query" "$@" 2>/dev/null
     }
 
+    # Escape spaces in completion results so bash treats them as single args
+    _cw_escape() {
+        local i
+        for i in "$@"; do
+            printf '%s\n' "${i// /\\ }"
+        done
+    }
+
     if [ "$COMP_CWORD" -eq 2 ]; then
         # First argument after command — context names (or target for go/rename)
         case "$cmd" in
@@ -102,13 +110,17 @@ for c in candidates:
                     mapfile -t windows < <(_cw_list_windows "$ctx_name" 2>/dev/null)
                     local -a matches
                     mapfile -t matches < <(_cw_fuzzy_match "$win_query" "${windows[@]}")
-                    COMPREPLY=( "${matches[@]/#/${ctx_name}/}" )
+                    local -a escaped
+                    mapfile -t escaped < <(_cw_escape "${matches[@]/#/${ctx_name}/}")
+                    COMPREPLY=( "${escaped[@]}" )
                 else
                     local -a contexts
                     mapfile -t contexts < <(_cw_list_contexts 2>/dev/null)
                     local -a matches
                     mapfile -t matches < <(_cw_fuzzy_match "$cur" "${contexts[@]}")
-                    COMPREPLY=( "${matches[@]}" )
+                    local -a escaped
+                    mapfile -t escaped < <(_cw_escape "${matches[@]}")
+                    COMPREPLY=( "${escaped[@]}" )
                 fi
                 ;;
             go)
@@ -119,7 +131,9 @@ for c in candidates:
                     mapfile -t windows < <(_cw_list_windows "$ctx_name" 2>/dev/null)
                     local -a matches
                     mapfile -t matches < <(_cw_fuzzy_match "$win_query" "${windows[@]}")
-                    COMPREPLY=( "${matches[@]/#/${ctx_name}/}" )
+                    local -a escaped
+                    mapfile -t escaped < <(_cw_escape "${matches[@]/#/${ctx_name}/}")
+                    COMPREPLY=( "${escaped[@]}" )
                 else
                     local -a contexts titles all_items
                     mapfile -t contexts < <(_cw_list_contexts 2>/dev/null)
@@ -127,7 +141,9 @@ for c in candidates:
                     all_items=( "${contexts[@]}" "${titles[@]}" )
                     local -a matches
                     mapfile -t matches < <(_cw_fuzzy_match "$cur" "${all_items[@]}")
-                    COMPREPLY=( "${matches[@]}" )
+                    local -a escaped
+                    mapfile -t escaped < <(_cw_escape "${matches[@]}")
+                    COMPREPLY=( "${escaped[@]}" )
                 fi
                 ;;
             completion)
@@ -142,7 +158,9 @@ for c in candidates:
                 local -a titles matches
                 mapfile -t titles < <(_cw_list_iterm_titles 2>/dev/null)
                 mapfile -t matches < <(_cw_fuzzy_match "$cur" "${titles[@]}")
-                COMPREPLY=( "${matches[@]}" )
+                local -a escaped
+                mapfile -t escaped < <(_cw_escape "${matches[@]}")
+                COMPREPLY=( "${escaped[@]}" )
                 ;;
         esac
     fi

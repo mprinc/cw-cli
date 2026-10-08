@@ -594,6 +594,12 @@ async def _cmd_join(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     database.set_mapping(cw_window.id, iterm_window.window_id, "window")
     database.sync_window_layout(cw_window.id, window_state["tabs"])
     await _set_window_cw_vars(iterm_window, context.id, cw_window.id, context.name, window_name)
+    # Set window title to "Context / Window"
+    try:
+        title = f"{context.name} / {window_name}" if window_name != context.name else context.name
+        await iterm_window.async_set_title(title)
+    except Exception:
+        pass
     database.save_snapshot(context.id, "window_joined")
 
     logger.info("Window '%s' joined context '%s'", window_name, name)
@@ -651,6 +657,9 @@ async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
                 await session.async_set_variable(ITERM_VAR_WINDOW_ID, "")
                 await session.async_set_variable("user.cw_context_name", "")
                 await session.async_set_variable("user.cw_window_name", "")
+                # Clear badge
+                profile = await session.async_get_profile()
+                await profile.async_set_badge_text("")
             except Exception:
                 pass
 
@@ -697,6 +706,8 @@ async def _cmd_rename(args: dict, app: iterm2.App, database: CwDatabase) -> dict
                     iterm_window, context.id, target_window.id,
                     context.name, new_name,
                 )
+                title = f"{context.name} / {new_name}" if new_name != context.name else context.name
+                await iterm_window.async_set_title(title)
 
         logger.info("Renamed window '%s' → '%s' in context '%s'", window_name, new_name, context_name)
     else:
@@ -722,6 +733,8 @@ async def _cmd_rename(args: dict, app: iterm2.App, database: CwDatabase) -> dict
                     await _set_window_cw_vars(
                         iterm_window, context.id, w.id, new_name, w.name,
                     )
+                    title = f"{new_name} / {w.name}" if w.name != new_name else new_name
+                    await iterm_window.async_set_title(title)
 
         logger.info("Renamed context '%s' → '%s'", context_name, new_name)
 
@@ -1264,10 +1277,27 @@ async def _restore_window(
     if not new_window:
         return None
 
-    # Set CWD for the first pane
+    # Helper to set up a restored session (CWD, name, title)
+    async def _setup_session(session: iterm2.Session, pane_data):
+        if pane_data.cwd:
+            await session.async_send_text(f"cd {_shell_escape(pane_data.cwd)}\n")
+        if pane_data.title:
+            try:
+                await session.async_set_name(pane_data.title)
+            except Exception:
+                pass
+
+    # Set up the first pane
     first_session = new_window.current_tab.sessions[0] if new_window.current_tab else None
-    if first_session and cwd:
-        await first_session.async_send_text(f"cd {_shell_escape(cwd)}\n")
+    if first_session:
+        await _setup_session(first_session, first_pane)
+
+    # Set first tab title
+    if new_window.current_tab and first_tab.title:
+        try:
+            await new_window.current_tab.async_set_title(first_tab.title)
+        except Exception:
+            pass
 
     # Create additional panes in the first tab
     if first_tab.panes and len(first_tab.panes) > 1:
@@ -1277,9 +1307,9 @@ async def _restore_window(
                     vertical=True,
                     profile=pane.profile or "Default",
                 )
-                if new_session and pane.cwd:
-                    await new_session.async_send_text(f"cd {_shell_escape(pane.cwd)}\n")
-                first_session = new_session  # split from the last created
+                if new_session:
+                    await _setup_session(new_session, pane)
+                first_session = new_session
             except Exception:
                 logger.exception("Failed to split pane during restore")
 
@@ -1289,30 +1319,44 @@ async def _restore_window(
             first_pane_in_tab = tab.panes[0] if tab.panes else None
             tab_profile = first_pane_in_tab.profile if first_pane_in_tab else "Default"
             new_tab = await new_window.async_create_tab(profile=tab_profile)
-            if new_tab and first_pane_in_tab and first_pane_in_tab.cwd:
-                tab_session = new_tab.sessions[0] if new_tab.sessions else None
-                if tab_session:
-                    await tab_session.async_send_text(
-                        f"cd {_shell_escape(first_pane_in_tab.cwd)}\n"
-                    )
+            if not new_tab:
+                continue
+
+            # Set tab title
+            if tab.title:
+                try:
+                    await new_tab.async_set_title(tab.title)
+                except Exception:
+                    pass
+
+            # Set up first pane in this tab
+            tab_session = new_tab.sessions[0] if new_tab.sessions else None
+            if tab_session and first_pane_in_tab:
+                await _setup_session(tab_session, first_pane_in_tab)
+
             # Additional panes in this tab
-            if new_tab and tab.panes and len(tab.panes) > 1:
-                base_session = new_tab.sessions[0] if new_tab.sessions else None
+            if tab.panes and len(tab.panes) > 1:
+                base_session = tab_session
                 for pane in tab.panes[1:]:
                     try:
                         new_session = await base_session.async_split_pane(
                             vertical=True,
                             profile=pane.profile or "Default",
                         )
-                        if new_session and pane.cwd:
-                            await new_session.async_send_text(
-                                f"cd {_shell_escape(pane.cwd)}\n"
-                            )
+                        if new_session:
+                            await _setup_session(new_session, pane)
                         base_session = new_session
                     except Exception:
                         logger.exception("Failed to split pane during tab restore")
         except Exception:
             logger.exception("Failed to create tab during restore")
+
+    # Set window title
+    try:
+        title = f"{context.name} / {window.name}" if window.name else context.name
+        await new_window.async_set_title(title)
+    except Exception:
+        pass
 
     # Set window geometry if saved
     if window.frame_x is not None and window.frame_width is not None:
@@ -1361,6 +1405,10 @@ async def _set_window_cw_vars(
                 # Human-readable names for iTerm badge display
                 await session.async_set_variable("user.cw_context_name", context_name)
                 await session.async_set_variable("user.cw_window_name", window_name)
+                # Set iTerm2 badge directly so user doesn't need manual config
+                badge = f"{context_name} / {window_name}" if window_name else context_name
+                profile = await session.async_get_profile()
+                await profile.async_set_badge_text(badge)
             except Exception:
                 logger.exception("Failed to set CW vars on session %s", session.session_id)
 

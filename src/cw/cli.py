@@ -350,7 +350,10 @@ def cmd_open(name: str):
     response = _daemon_required("open", {"name": name})
     if response.get("ok"):
         restored = response["data"].get("restored_windows", 0)
-        click.echo(f"✓ Restored {restored} window(s).")
+        if restored == 0:
+            click.echo("No closed windows to restore (already open?).")
+        else:
+            click.echo(f"✓ Restored {restored} window(s).")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
@@ -370,7 +373,10 @@ def cmd_close(name: str):
     response = _daemon_required("close", {"name": name})
     if response.get("ok"):
         closed = response["data"].get("closed_windows", 0)
-        click.echo(f"✓ Saved and closed {closed} window(s).")
+        if closed == 0:
+            click.echo("No open windows to close (already closed?).")
+        else:
+            click.echo(f"✓ Saved and closed {closed} window(s).")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
