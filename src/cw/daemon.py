@@ -378,6 +378,25 @@ async def _dispatch_command(
     @param database: CW database instance.
     @returns: Response dict with "ok" and optional "data"/"error".
     """
+    # "reload" is handled here directly — it reloads all CW modules
+    # so code changes take effect without restarting iTerm2
+    if command == "reload":
+        return await _cmd_reload(args, app, database)
+
+    # Dispatch to handler — uses dynamic import so reload takes effect
+    handler = _get_handler(command)
+    if not handler:
+        return {"ok": False, "error": f"Unknown command: {command}"}
+    return await handler(args, app, database)
+
+
+def _get_handler(command: str):
+    """
+    Look up a command handler by name.
+
+    This is a function (not a dict literal) so that after _cmd_reload()
+    reloads the module, new/changed handlers are picked up.
+    """
     handlers = {
         "create": _cmd_create,
         "join": _cmd_join,
@@ -390,10 +409,85 @@ async def _dispatch_command(
         "all_windows": _cmd_all_windows,
         "focus": _cmd_focus,
     }
-    handler = handlers.get(command)
-    if not handler:
-        return {"ok": False, "error": f"Unknown command: {command}"}
-    return await handler(args, app, database)
+    return handlers.get(command)
+
+
+async def _cmd_reload(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Reload all CW Python modules so code changes take effect
+    without restarting iTerm2.
+
+    Also detects new .py files that weren't loaded at daemon start —
+    those require a full iTerm restart since importlib.reload can only
+    reload already-imported modules.
+
+    Usage from CLI: `cw reload`
+    """
+    import importlib
+    import sys as _sys
+
+    # Modules the daemon actually uses (not CLI-only ones like cli.py, completion.py)
+    DAEMON_MODULES = {"cw.constants", "cw.models", "cw.db", "cw.reconciler", "cw.daemon"}
+
+    # Discover all .py files in src/cw/ that could be daemon modules
+    cw_package_dir = Path(__file__).parent
+    files_on_disk = {
+        f"cw.{p.stem}"
+        for p in cw_package_dir.glob("*.py")
+        if p.stem != "__pycache__" and not p.stem.startswith("_")
+    }
+    # Only consider files that look like daemon modules (not cli, completion, etc.)
+    # A "new daemon module" is one that exists on disk, is NOT in our known set,
+    # and is also NOT already loaded (i.e. truly new)
+    loaded_cw_modules = {
+        name for name in _sys.modules if name.startswith("cw.") and not name.startswith("cw.__")
+    }
+
+    # CLI-only modules that the daemon never imports — ignore these
+    cli_only_modules = files_on_disk - DAEMON_MODULES - loaded_cw_modules
+
+    # New daemon-relevant files on disk that aren't loaded
+    new_modules = (files_on_disk - loaded_cw_modules - cli_only_modules)
+    # Daemon modules that were loaded but no longer exist on disk
+    removed_modules = (DAEMON_MODULES & loaded_cw_modules) - files_on_disk
+
+    # Reload all currently loaded cw.* modules
+    modules_reloaded = []
+    reload_errors = []
+    for module_name in sorted(loaded_cw_modules):
+        module = _sys.modules.get(module_name)
+        if module:
+            try:
+                importlib.reload(module)
+                modules_reloaded.append(module_name)
+            except Exception as exc:
+                logger.exception("Failed to reload %s", module_name)
+                reload_errors.append(f"{module_name}: {exc}")
+
+    if reload_errors:
+        return {"ok": False, "error": f"Reload failed: {'; '.join(reload_errors)}"}
+
+    # Build warnings for user
+    warnings = []
+    if new_modules:
+        names = ", ".join(sorted(new_modules))
+        warnings.append(
+            f"New modules detected ({names}) — these require iTerm restart to load"
+        )
+    if removed_modules:
+        names = ", ".join(sorted(removed_modules))
+        warnings.append(
+            f"Removed modules still in memory ({names}) — iTerm restart recommended"
+        )
+
+    logger.info("Reloaded %d modules, warnings: %s", len(modules_reloaded), warnings)
+    return {
+        "ok": True,
+        "data": {
+            "reloaded": modules_reloaded,
+            "warnings": warnings,
+        },
+    }
 
 
 # ─── Command handlers ─────────────────────────────────────────────

@@ -421,15 +421,17 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
     # ─── Mode: specific Context or auto-detect ─────────────────────
     if not name:
         # Auto-detect: ask daemon which Context the current window belongs to
-        response = _daemon_required("current")
-        if not response.get("ok"):
-            click.echo(f"Error: {response.get('error')}", err=True)
-            sys.exit(1)
-        current = response["data"]
-        name = current.get("context_name")
+        try:
+            response = _send_to_daemon("current")
+            if response.get("ok"):
+                name = response["data"].get("context_name")
+        except ConnectionError:
+            pass
+
         if not name:
             click.echo("Current window is not tracked by any Context.", err=True)
-            click.echo("Use `cw windows --all` to see all windows.", err=True)
+            click.echo("Use `cw windows --all` to see all windows,", err=True)
+            click.echo("or specify a context: cw windows <name>", err=True)
             sys.exit(1)
 
     from cw.db import CwDatabase
@@ -488,6 +490,29 @@ def cmd_focus(name: str):
     if response.get("ok"):
         data = response["data"]
         click.echo(f"✓ Focused: {data.get('focused', '')} / {data.get('window', '')}")
+    else:
+        click.echo(f"Error: {response.get('error')}", err=True)
+        sys.exit(1)
+
+
+# ─── cw reload ─────────────────────────────────────────────────────
+
+@main.command("reload")
+def cmd_reload():
+    """
+    Reload daemon code without restarting iTerm2.
+
+    Use after editing CW source code. The daemon reloads all
+    Python modules so changes take effect immediately.
+    """
+    response = _daemon_required("reload")
+    if response.get("ok"):
+        data = response["data"]
+        modules = data.get("reloaded", [])
+        warnings = data.get("warnings", [])
+        click.echo(f"✓ Daemon reloaded ({len(modules)} modules)")
+        for warning in warnings:
+            click.echo(f"⚠ {warning}")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
