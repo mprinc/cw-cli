@@ -1,4 +1,4 @@
-Synced with commit: 3bf9d59
+Synced with commit: 2e0c7ea
 
 # CW Command Reference
 
@@ -67,13 +67,16 @@ Tab completion for the second argument shows iTerm window titles.
 
 ---
 
-## `cw leave`
+## `cw leave [<target>]`
 
-Remove the current window from its Context. The window stays open in iTerm but CW stops tracking it. Asks for confirmation.
+Remove a window from its Context. The window stays open in iTerm but CW stops tracking it. Without TARGET, removes the current (focused) window.
 
 ```bash
-cw leave           # Asks: Remove window "Dev" from Context "MyProject"?
-cw leave -y        # Skip confirmation
+cw leave                         # Current window (asks for confirmation)
+cw leave -y                      # Skip confirmation
+cw leave LitTerra/ДРУЖБА         # By Context/Window name
+cw leave 14                      # By ref number
+cw leave IoT                     # By iTerm title
 ```
 
 Options:
@@ -116,14 +119,19 @@ What does NOT auto-run:
 
 ---
 
-## `cw close <name>[/<window>]`
+## `cw close [<name>[/<window>]]`
 
-Save the current state, then close windows in iTerm. Follows the **save-before-close** principle — if the save fails, the close is aborted and no windows are lost.
+Save the current state, then close windows in iTerm. Without arguments, closes the current window (asks for confirmation). Follows the **save-before-close** principle — if the save fails, the close is aborted and no windows are lost.
 
 ```bash
+cw close                             # Close current window (confirm)
+cw close -y                          # Close current window (no confirm)
 cw close MyProject                   # Save and close all windows
 cw close MyProject/Infrastructure    # Close one specific window
 ```
+
+Options:
+- `-y`, `--yes` — skip confirmation when closing current window
 
 The closed windows remain members of the Context (`is_member=true`, `is_open=false`) and can be restored with `cw open`.
 

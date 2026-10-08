@@ -1,4 +1,4 @@
-Synced with commit: 3bf9d59
+Synced with commit: 2e0c7ea
 
 # Contextual-Walker
 
@@ -54,6 +54,7 @@ cw go МојПројекат               # Скочи на задњи кори
 cw go 3                         # Скочи по реф броју
 cw go IoT                       # Скочи по iTerm наслову
 cw go -                         # Врати се на претходни Context
+cw close                        # Затвори тренутни прозор (потврда)
 cw close МојПројекат            # Сачувај и затвори
 cw open МојПројекат             # Врати све назад
 cw save                         # Форсирај snapshot

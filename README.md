@@ -1,4 +1,4 @@
-Synced with commit: 3bf9d59
+Synced with commit: 2e0c7ea
 
 # Contextual-Walker
 
@@ -55,6 +55,7 @@ cw go MyProject               # Jump to last used window in Context
 cw go 3                       # Jump by ref number
 cw go IoT                     # Jump by iTerm title
 cw go -                       # Jump back to previous Context
+cw close                      # Close current window (confirm)
 cw close MyProject            # Save state and close all windows
 cw open MyProject             # Restore everything
 cw save                       # Force a snapshot
