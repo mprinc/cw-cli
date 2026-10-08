@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contextual-walker"
+version = "0.1.0"
+description = "Persistent context manager for iTerm2 — groups windows by project, tracks state, restores layout"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Sasha Rudan" },
+]
+
+dependencies = [
+    "iterm2>=2.7",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+# CLI entry point — `cw` command
+[project.scripts]
+cw = "cw.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
