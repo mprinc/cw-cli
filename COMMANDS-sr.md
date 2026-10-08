@@ -1,4 +1,4 @@
-Synced with commit: 5cf538a
+Synced with commit: 6fc6029
 
 # CW Референца команди
 
@@ -323,7 +323,10 @@ cw completion fish > ~/.config/fish/completions/cw.fish
 cw <TAB>                           → list, create, open, close, ...
 cw open <TAB>                      → МојПројекат, EcoColabo, ...
 cw open МојПројекат/<TAB>          → Development, Инфраструктура, ...
+cw close LitTerra/Dr<TAB>          → LitTerra/ДРУЖБА
 ```
+
+Completion је **case-insensitive** и подржава **латиница→ћирилица транслитерацију** (нпр. `Dr` матчује `ДРУЖБА`, `lit` матчује `LitTerra`).
 
 ---
 

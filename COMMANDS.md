@@ -1,4 +1,4 @@
-Synced with commit: 5cf538a
+Synced with commit: 6fc6029
 
 # CW Command Reference
 
@@ -336,7 +336,10 @@ After sourcing, tab-completion works hierarchically:
 cw <TAB>                        → list, create, open, close, ...
 cw open <TAB>                   → MyProject, EcoColabo, ...
 cw open MyProject/<TAB>         → Development, Infrastructure, ...
+cw close LitTerra/Dr<TAB>       → LitTerra/ДРУЖБА
 ```
+
+Completion is **case-insensitive** and supports **Latin→Cyrillic transliteration** (e.g. `Dr` matches `ДРУЖБА`, `lit` matches `LitTerra`).
 
 ---
 
