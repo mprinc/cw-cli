@@ -1,4 +1,4 @@
-Synced with commit: 6fc6029
+Synced with commit: 3bf9d59
 
 # CW Command Reference
 
@@ -106,9 +106,9 @@ cw open MyProject/Infrastructure     # Restore one specific window
 ```
 
 What gets restored:
-- Window position and size
-- Tab structure
-- Pane splits
+- Window position, size, and title
+- Tab structure and tab titles
+- Pane splits and session names
 - Working directories (via `cd`)
 
 What does NOT auto-run:
