@@ -408,6 +408,8 @@ def _get_handler(command: str):
         "current": _cmd_current,
         "all_windows": _cmd_all_windows,
         "focus": _cmd_focus,
+        "focus_ref": _cmd_focus_ref,
+        "leave": _cmd_leave,
     }
     return handlers.get(command)
 
@@ -494,11 +496,9 @@ async def _cmd_reload(args: dict, app: iterm2.App, database: CwDatabase) -> dict
 
 async def _cmd_create(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     """
-    Create a new Context and assign the currently focused window to it.
+    Create a new empty Context.
 
-    The focused window becomes the first member of the new Context.
-    CW user variables are set on all sessions so the window can be
-    re-identified after restart.
+    Does NOT automatically add the current window — use `cw join` for that.
 
     @param args: {"name": "MyProject", "description": "..."}
     """
@@ -506,43 +506,15 @@ async def _cmd_create(args: dict, app: iterm2.App, database: CwDatabase) -> dict
     if not name:
         return {"ok": False, "error": "Context name is required"}
 
-    # Check if already exists
     existing = database.get_context_by_name(name)
     if existing:
         return {"ok": False, "error": f"Context '{name}' already exists"}
 
-    # Get the currently focused window
-    iterm_window = app.current_terminal_window
-    if not iterm_window:
-        return {"ok": False, "error": "No focused iTerm window found"}
-
-    # Create context and window in DB
     context = database.create_context(name, args.get("description", ""))
-    window_state = await read_iterm_window_state(iterm_window)
-    cw_window = database.create_window(
-        context_id=context.id,
-        name=name,  # default window name = context name
-        frame_x=window_state["frame_x"],
-        frame_y=window_state["frame_y"],
-        frame_width=window_state["frame_width"],
-        frame_height=window_state["frame_height"],
-        fullscreen=window_state["fullscreen"],
-    )
-
-    # Create ID mapping
-    database.set_mapping(cw_window.id, iterm_window.window_id, "window")
-
-    # Sync tab/pane layout
-    database.sync_window_layout(cw_window.id, window_state["tabs"])
-
-    # Set CW user variables on all sessions so we can re-identify this window
-    await _set_window_cw_vars(iterm_window, context.id, cw_window.id, context.name, name)
-
-    # Save initial snapshot
     database.save_snapshot(context.id, "context_created")
 
-    logger.info("Created context '%s' with window '%s'", name, cw_window.name)
-    return {"ok": True, "data": {"context_id": context.id, "window_id": cw_window.id}}
+    logger.info("Created context '%s'", name)
+    return {"ok": True, "data": {"context_id": context.id}}
 
 
 async def _cmd_join(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
@@ -581,8 +553,14 @@ async def _cmd_join(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     if existing_cw_id:
         return {"ok": False, "error": "This window already belongs to a Context"}
 
-    window_name = args.get("window_name", "").strip() or f"Window {len(context.windows) + 1}"
     window_state = await read_iterm_window_state(iterm_window)
+    # Default window name: use iTerm window title, fall back to context name
+    iterm_title = ""
+    try:
+        iterm_title = await iterm_window.async_get_variable("titleOverride") or ""
+    except Exception:
+        pass
+    window_name = args.get("window_name", "").strip() or iterm_title or name
 
     cw_window = database.create_window(
         context_id=context.id,
@@ -600,6 +578,64 @@ async def _cmd_join(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
     logger.info("Window '%s' joined context '%s'", window_name, name)
     return {"ok": True, "data": {"window_id": cw_window.id}}
+
+
+async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Remove the current window from its Context (explicit membership change).
+
+    The window stays open in iTerm but CW stops tracking it.
+    Requires confirmation unless args["confirm"] is True.
+
+    @param args: {"confirm": bool}
+    """
+    iterm_window = app.current_terminal_window
+    if not iterm_window:
+        return {"ok": False, "error": "No focused iTerm window found"}
+
+    cw_id = database.get_cw_id_for_iterm(iterm_window.window_id)
+    if not cw_id:
+        return {"ok": False, "error": "Current window is not tracked by any Context"}
+
+    cw_window = database.get_window_by_id(cw_id)
+    if not cw_window:
+        return {"ok": False, "error": "Window not found in database"}
+
+    context = database.get_context_by_id(cw_window.context_id)
+    context_name = context.name if context else "?"
+
+    # Ask for confirmation if not already confirmed
+    if not args.get("confirm"):
+        return {
+            "ok": False,
+            "error": "confirm",
+            "data": {
+                "context_name": context_name,
+                "window_name": cw_window.name,
+            },
+        }
+
+    # Save snapshot before removing
+    if context:
+        database.save_snapshot(context.id, "before_leave")
+
+    # Remove membership
+    database.update_window_state(cw_id, is_member=False, is_open=False)
+    database.deactivate_mappings_for_cw_id(cw_id)
+
+    # Clear CW user variables from all sessions in this window
+    for tab in iterm_window.tabs:
+        for session in tab.sessions:
+            try:
+                await session.async_set_variable(ITERM_VAR_CONTEXT_ID, "")
+                await session.async_set_variable(ITERM_VAR_WINDOW_ID, "")
+                await session.async_set_variable("user.cw_context_name", "")
+                await session.async_set_variable("user.cw_window_name", "")
+            except Exception:
+                pass
+
+    logger.info("Window '%s' left context '%s'", cw_window.name, context_name)
+    return {"ok": True, "data": {"context_name": context_name, "window_name": cw_window.name}}
 
 
 async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
@@ -1014,6 +1050,33 @@ async def _cmd_focus(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 _last_focused_context: str | None = None
 # Remembers the last focused CW window ID per context name
 _last_focused_window_per_context: dict[str, str] = {}
+
+
+async def _cmd_focus_ref(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Focus (jump to) a window by its ref number from `cw windows --all`.
+
+    @param args: {"ref": int}
+    """
+    ref = args.get("ref")
+    if ref is None:
+        return {"ok": False, "error": "ref number is required"}
+
+    try:
+        ref_index = int(ref) - 1
+        windows_list = list(app.terminal_windows)
+        if ref_index < 0 or ref_index >= len(windows_list):
+            return {"ok": False, "error": f"Invalid ref #{ref} — use `cw windows --all` to see refs"}
+        iterm_window = windows_list[ref_index]
+    except (ValueError, TypeError):
+        return {"ok": False, "error": f"Invalid ref: {ref}"}
+
+    try:
+        title = await iterm_window.async_get_variable("titleOverride") or iterm_window.window_id
+        await iterm_window.async_activate()
+        return {"ok": True, "data": {"focused": f"#{ref} ({title})"}}
+    except Exception as exc:
+        return {"ok": False, "error": f"Failed to focus window: {exc}"}
 
 
 # ─── Window restore helper ────────────────────────────────────────

@@ -213,49 +213,105 @@ def _list_from_db():
 @main.command("create")
 @click.argument("name")
 @click.option("--description", "-d", default="", help="Optional description for the Context.")
-def cmd_create(name: str, description: str):
+@click.option("--add", "-a", is_flag=True, help="Also add the current window to the new Context.")
+def cmd_create(name: str, description: str, add: bool):
     """
-    Create a new Context and assign the current iTerm window to it.
+    Create a new Context.
 
-    The focused window becomes the first member of the new Context.
+    By default creates an empty Context. Use -a to also add the current window.
+
+    \b
+    Examples:
+      cw create MyProject            empty Context
+      cw create MyProject -a         create + add current window
+      cw create MyProject -a -d "Frontend dev"
     """
     response = _daemon_required("create", {"name": name, "description": description})
-    if response.get("ok"):
-        click.echo(f"✓ Context '{name}' created. Current window is now tracked.")
-    else:
+    if not response.get("ok"):
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
+
+    if add:
+        join_response = _daemon_required("join", {"name": name})
+        if join_response.get("ok"):
+            click.echo(f"✓ Context '{name}' created. Current window added.")
+        else:
+            click.echo(f"✓ Context '{name}' created, but failed to add window: {join_response.get('error')}", err=True)
+    else:
+        click.echo(f"✓ Context '{name}' created. Add windows with: cw join {name}")
 
 
 # ─── cw join ───────────────────────────────────────────────────────
 
 @main.command("join")
 @click.argument("name")
+@click.argument("window_ref", required=False)
 @click.option("--window-name", "-w", default="", help="Name for this window within the Context.")
-@click.option("--ref", "-r", default=None, type=int, help="Window ref number from `cw windows --all`.")
-def cmd_join(name: str, window_name: str, ref: int | None):
+def cmd_join(name: str, window_ref: str | None, window_name: str):
     """
     Add a window to an existing Context.
 
-    By default adds the current (focused) window. Use --ref to add
-    a specific window by its reference number from `cw windows --all`.
+    By default adds the current (focused) window. Pass a number to add
+    a specific window by its ref from `cw windows --all`.
 
     \b
     Examples:
       cw join MyProject              add current window
-      cw join MyProject --ref 3      add window #3 from `cw windows --all`
-      cw join MyProject -r 3 -w Dev  add window #3 and name it "Dev"
+      cw join MyProject 3            add window #3
+      cw join MyProject 3 -w Dev     add window #3, name it "Dev"
     """
     args = {"name": name, "window_name": window_name}
-    if ref is not None:
-        args["ref"] = ref
+    if window_ref is not None:
+        try:
+            args["ref"] = int(window_ref)
+        except ValueError:
+            click.echo(f"Error: ref must be a number (got '{window_ref}')", err=True)
+            sys.exit(1)
+
     response = _daemon_required("join", args)
     if response.get("ok"):
-        source = f"window #{ref}" if ref else "current window"
-        click.echo(f"✓ {source.capitalize()} joined context '{name}'.")
+        source = f"Window #{window_ref}" if window_ref else "Current window"
+        click.echo(f"✓ {source} joined context '{name}'.")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
+
+
+# ─── cw leave ──────────────────────────────────────────────────────
+
+@main.command("leave")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+def cmd_leave(yes: bool):
+    """
+    Remove the current window from its Context.
+
+    The window stays open in iTerm but is no longer tracked by CW.
+    This is an explicit membership change — closing a window does NOT
+    remove it from the Context.
+    """
+    response = _daemon_required("leave", {"confirm": yes})
+    if not response.get("ok"):
+        error = response.get("error", "")
+        if error == "confirm":
+            # Daemon asks for confirmation
+            data = response.get("data", {})
+            ctx = data.get("context_name", "?")
+            win = data.get("window_name", "?")
+            if click.confirm(f"Remove window \"{win}\" from Context \"{ctx}\"?"):
+                response = _daemon_required("leave", {"confirm": True})
+                if response.get("ok"):
+                    click.echo(f"✓ Window \"{win}\" removed from \"{ctx}\".")
+                else:
+                    click.echo(f"Error: {response.get('error')}", err=True)
+                    sys.exit(1)
+            else:
+                click.echo("Cancelled.")
+        else:
+            click.echo(f"Error: {error}", err=True)
+            sys.exit(1)
+    else:
+        data = response.get("data", {})
+        click.echo(f"✓ Window \"{data.get('window_name', '?')}\" removed from \"{data.get('context_name', '?')}\".")
 
 
 # ─── cw open ───────────────────────────────────────────────────────
@@ -386,7 +442,7 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
     \b
     With --all/--untracked, each window shows a ref number (#1, #2, ...)
     that you can use with `cw join` to add it to a Context:
-      cw join MyProject --ref 3
+      cw join MyProject 3
     """
     # ─── Mode: --all or --untracked (live iTerm windows) ───────────
     if show_all or untracked:
@@ -406,7 +462,7 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
         click.echo(f"\n{'REF':<5} {'CONTEXT':<18} {'WINDOW':<18} {'ITERM TITLE':<25} {'TABS':>4}  {'PANES':>5}")
         click.echo("─" * 80)
         for win in windows:
-            ref_str = f"#{win['ref']}"
+            ref_str = str(win['ref'])
             ctx = win["context_name"] or "—"
             wname = win["window_name"] or "—"
             title = (win["iterm_title"] or "")[:24]
@@ -415,7 +471,7 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
                 f"{ref_str:<5} {tracked_icon} {ctx:<17} {wname:<18} {title:<25} {win['tabs']:>3}  {win['panes']:>5}"
             )
         if untracked:
-            click.echo(f"\nTo add a window to a Context: cw join MyContext --ref <number>")
+            click.echo(f"\nTo add: cw join MyContext <ref>    To jump: cw go <ref>")
         return
 
     # ─── Mode: specific Context or auto-detect ─────────────────────
@@ -472,24 +528,33 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
                         click.echo(f"      │   {connector} {pane_title}{cwd_info}")
 
 
-# ─── cw focus ──────────────────────────────────────────────────────
+# ─── cw go ─────────────────────────────────────────────────────────
 
-@main.command("focus")
-@click.argument("name")
-def cmd_focus(name: str):
+@main.command("go")
+@click.argument("target")
+def cmd_go(target: str):
     """
     Jump to a Context window (bring it to front).
 
+    A number jumps by ref from `cw windows --all`. A name jumps by Context.
+
     \b
     Examples:
-      cw focus MyProject                focus first open window
-      cw focus MyProject/Development    focus specific window
-      cw focus -                        jump back to previous Context
+      cw go MyProject                last used window in Context
+      cw go MyProject/Development    specific window
+      cw go -                        jump back to previous Context
+      cw go 3                        window #3 from `cw windows --all`
     """
-    response = _daemon_required("focus", {"name": name})
+    # Number = ref, anything else = context name
+    try:
+        ref = int(target)
+        response = _daemon_required("focus_ref", {"ref": ref})
+    except ValueError:
+        response = _daemon_required("focus", {"name": target})
+
     if response.get("ok"):
         data = response["data"]
-        click.echo(f"✓ Focused: {data.get('focused', '')} / {data.get('window', '')}")
+        click.echo(f"✓ {data.get('focused', '')}")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
