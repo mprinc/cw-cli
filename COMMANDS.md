@@ -1,4 +1,4 @@
-Synced with commit: 91087a5
+Synced with commit: 05a75c6
 
 # CW Command Reference
 
@@ -194,6 +194,23 @@ cw focus -                           # Jump back to previous Context
 ```
 
 Use `cw focus -` to toggle between two Contexts (like `cd -` in the shell).
+
+---
+
+## `cw reload`
+
+Reload the daemon's Python modules so code changes take effect without restarting iTerm2.
+
+```bash
+cw reload
+```
+
+If new source files were added (not just modified), the reload will warn that an iTerm restart is needed for those specific modules.
+
+```
+✓ Daemon reloaded (5 modules)
+⚠ New modules detected (cw.export) — these require iTerm restart to load
+```
 
 ---
 

@@ -1,4 +1,4 @@
-Synced with commit: 91087a5
+Synced with commit: 05a75c6
 
 # CW Референца команди
 
@@ -181,6 +181,23 @@ cw focus -                                  # Врати се на претхо�
 ```
 
 Користи `cw focus -` за брзо пребацивање између два Context-а (као `cd -` у shell-у).
+
+---
+
+## `cw reload`
+
+Reload Python модула daemon-а тако да промјене кода одмах раде без рестартовања iTerm-а.
+
+```bash
+cw reload
+```
+
+Ако су додани нови изворни фајлови (не само измијењени постојећи), reload ће упозорити да је за те модуле потребан рестарт iTerm-а.
+
+```
+✓ Daemon reloaded (5 modules)
+⚠ New modules detected (cw.export) — these require iTerm restart to load
+```
 
 ---
 

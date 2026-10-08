@@ -1,4 +1,4 @@
-Synced with commit: 91087a5
+Synced with commit: 05a75c6
 
 # Contextual-Walker
 
@@ -54,6 +54,7 @@ cw open МојПројекат             # Врати све назад
 cw save                         # Форсирај snapshot
 cw history МојПројекат          # Прикажи историју
 cw backup                       # Бекап базе
+cw reload                       # Reload daemon кода (без рестарта iTerm-а)
 ```
 
 ## Инсталација са прилагођеним бекап фолдером

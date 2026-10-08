@@ -1,4 +1,4 @@
-Synced with commit: 91087a5
+Synced with commit: 05a75c6
 
 # CW Архитектура
 
@@ -51,6 +51,7 @@ Synced with commit: 91087a5
 - Reconciliation при покретању (усаглашавање DB ↔ iTerm)
 - Unix socket сервер за CLI команде
 - Прати задњи фокусирани прозор по контексту
+- Hot-reload модула (`cw reload`) без рестартовања iTerm-а
 
 **Безбједност:** Сваки event handler је у `try/except`. Ако daemon падне, iTerm наставља нормално.
 
@@ -58,7 +59,7 @@ Synced with commit: 91087a5
 
 Click-based CLI који комуницира са daemon-ом преко Unix socket-а. За read-only операције (history) чита директно из SQLite.
 
-Команде: `list`, `create`, `join`, `open`, `close`, `save`, `history`, `windows`, `focus`, `status`, `backup`, `config`, `completion`
+Команде: `list`, `create`, `join`, `open`, `close`, `save`, `history`, `windows`, `focus`, `reload`, `status`, `backup`, `config`, `completion`
 
 ### 3. SQLite база (`src/cw/db.py`)
 

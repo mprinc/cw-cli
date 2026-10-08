@@ -1,4 +1,4 @@
-Synced with commit: 91087a5
+Synced with commit: 05a75c6
 
 # Contextual-Walker
 
@@ -55,6 +55,7 @@ cw open MyProject             # Restore everything
 cw save                       # Force a snapshot
 cw history MyProject          # View snapshots
 cw backup                     # Backup database
+cw reload                     # Reload daemon code (no iTerm restart needed)
 ```
 
 ## Install with custom backup directory
