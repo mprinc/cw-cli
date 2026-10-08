@@ -1,4 +1,4 @@
-Synced with commit: 066d73a
+Synced with commit: 5cf538a
 
 # Contextual-Walker
 
@@ -43,14 +43,17 @@ source ~/.bashrc   # or ~/.zshrc depending on your shell
 cw create MyProject           # Create empty Context
 cw create MyProject -a        # Create + add current window
 cw join MyProject             # Add current window to Context
-cw join MyProject 3           # Add window 3 (from cw windows --all)
+cw join MyProject 3           # Add window by ref number
+cw join MyProject IoT         # Add window by iTerm title
 cw leave                      # Remove current window from its Context
+cw rename Old New             # Rename Context or Context/Window
 cw list                       # All Contexts with live status
 cw windows                    # Windows in current Context
 cw windows -vv                # With tabs + panes + CWDs
 cw windows --all              # ALL iTerm windows (tracked + untracked)
 cw go MyProject               # Jump to last used window in Context
-cw go 3                       # Jump to window 3
+cw go 3                       # Jump by ref number
+cw go IoT                     # Jump by iTerm title
 cw go -                       # Jump back to previous Context
 cw close MyProject            # Save state and close all windows
 cw open MyProject             # Restore everything

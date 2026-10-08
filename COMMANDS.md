@@ -1,4 +1,4 @@
-Synced with commit: 066d73a
+Synced with commit: 5cf538a
 
 # CW Command Reference
 
@@ -49,18 +49,21 @@ Options:
 
 ---
 
-## `cw join <name> [<ref>]`
+## `cw join <name> [<target>]`
 
-Add a window to an existing Context. By default adds the current (focused) window. Pass a number to add a specific window by its ref from `cw windows --all`.
+Add a window to an existing Context. TARGET can be a ref number or an iTerm window title. If omitted, adds the current (focused) window.
 
 ```bash
 cw join MyProject                    # Add current window
-cw join MyProject 3                  # Add window 3 from `cw windows --all`
-cw join MyProject 3 -w "Dev"         # Add window 3 and name it "Dev"
+cw join MyProject 3                  # Add window by ref number
+cw join MyProject IoT                # Add window by iTerm title
+cw join MyProject IoT -w Dev         # Add and name it "Dev"
 ```
 
 Options:
 - `-w`, `--window-name TEXT` — name for this window (default: iTerm window title)
+
+Tab completion for the second argument shows iTerm window titles.
 
 ---
 
@@ -77,6 +80,19 @@ Options:
 - `-y`, `--yes` — skip confirmation prompt
 
 This is an explicit membership change. Closing a window does NOT remove it from the Context — only `cw leave` does.
+
+---
+
+## `cw rename <target> <new_name>`
+
+Rename a Context or a Window within a Context.
+
+```bash
+cw rename OldName NewName                  # Rename Context
+cw rename MyProject/OldWin NewWinName      # Rename Window
+```
+
+Tab completion works for both Context names and Context/Window paths.
 
 ---
 
@@ -198,18 +214,23 @@ The ref numbers can be used directly: `cw join MyContext 3` or `cw go 3`.
 
 ---
 
-## `cw go [<name>]`
+## `cw go <target>`
 
-Jump to a Context window (bring it to front).
+Jump to a window (bring it to front). TARGET can be a Context name, Context/Window, ref number, iTerm window title, or `-` to jump back.
 
-When only a Context name is given (no `/WindowName`), focuses the **last used window** in that context — not the first one. This is tracked automatically as you switch between windows.
+The lookup order: number → Context name → iTerm window title.
+
+When only a Context name is given, focuses the **last used window** in that context.
 
 ```bash
-cw go MyProject                      # Last used window in MyProject
-cw go MyProject/Development          # Specific window
+cw go MyProject                      # Last used window in Context
+cw go MyProject/Development          # Specific CW window
 cw go -                              # Jump back to previous Context
-cw go 3                              # Window 3 from `cw windows --all`
+cw go 3                              # Window by ref number
+cw go IoT                            # Window by iTerm title
 ```
+
+Tab completion shows both Context names and iTerm window titles.
 
 Use `cw go -` to toggle between two Contexts (like `cd -` in the shell).
 

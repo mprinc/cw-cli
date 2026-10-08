@@ -1,4 +1,4 @@
-Synced with commit: 066d73a
+Synced with commit: 5cf538a
 
 # Contextual-Walker
 
@@ -42,14 +42,17 @@ source ~/.bashrc   # или ~/.zshrc зависно од shell-а
 cw create МојПројекат           # Празан Context
 cw create МојПројекат -a        # Креирај + додај тренутни прозор
 cw join МојПројекат             # Додај тренутни прозор
-cw join МојПројекат 3           # Додај прозор 3 (из cw windows --all)
+cw join МојПројекат 3           # Додај по реф броју
+cw join МојПројекат IoT         # Додај по iTerm наслову
 cw leave                        # Уклони тренутни прозор из контекста
+cw rename Старо Ново            # Преименуј Context или Context/Window
 cw list                         # Сви Context-и са живим статусом
 cw windows                      # Прозори тренутног Context-а
 cw windows -vv                  # Са табовима + панелима + CWD
 cw windows --all                # СВИ iTerm прозори
 cw go МојПројекат               # Скочи на задњи кориштени прозор
-cw go 3                         # Скочи на прозор 3
+cw go 3                         # Скочи по реф броју
+cw go IoT                       # Скочи по iTerm наслову
 cw go -                         # Врати се на претходни Context
 cw close МојПројекат            # Сачувај и затвори
 cw open МојПројекат             # Врати све назад
