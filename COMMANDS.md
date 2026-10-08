@@ -1,4 +1,4 @@
-Synced with commit: 05a75c6
+Synced with commit: b96a2e6
 
 # CW Command Reference
 
@@ -35,31 +35,48 @@ If daemon is not running, falls back to database-only view with a warning.
 
 ## `cw create <name>`
 
-Create a new Context. The currently focused iTerm window becomes its first member.
+Create a new empty Context. Windows are added explicitly with `cw join`.
 
 ```bash
-cw create MyProject
-cw create MyProject -d "Frontend and backend development"
+cw create MyProject                              # Empty Context
+cw create MyProject -a                           # Create + add current window
+cw create MyProject -a -d "Frontend dev"         # Create + add + description
 ```
 
 Options:
 - `-d`, `--description TEXT` — optional description
+- `-a`, `--add` — also add the current window to the new Context
 
 ---
 
-## `cw join <name>`
+## `cw join <name> [<ref>]`
 
-Add a window to an existing Context. By default adds the current (focused) window. Use `--ref` to add a specific window by its reference number from `cw windows --all`.
+Add a window to an existing Context. By default adds the current (focused) window. Pass a number to add a specific window by its ref from `cw windows --all`.
 
 ```bash
 cw join MyProject                    # Add current window
-cw join MyProject --ref 3            # Add window #3 from `cw windows --all`
-cw join MyProject -r 3 -w "Dev"      # Add window #3 and name it "Dev"
+cw join MyProject 3                  # Add window 3 from `cw windows --all`
+cw join MyProject 3 -w "Dev"         # Add window 3 and name it "Dev"
 ```
 
 Options:
-- `-w`, `--window-name TEXT` — name for this window within the Context (default: auto-generated)
-- `-r`, `--ref INT` — window ref number from `cw windows --all`
+- `-w`, `--window-name TEXT` — name for this window (default: iTerm window title)
+
+---
+
+## `cw leave`
+
+Remove the current window from its Context. The window stays open in iTerm but CW stops tracking it. Asks for confirmation.
+
+```bash
+cw leave           # Asks: Remove window "Dev" from Context "MyProject"?
+cw leave -y        # Skip confirmation
+```
+
+Options:
+- `-y`, `--yes` — skip confirmation prompt
+
+This is an explicit membership change. Closing a window does NOT remove it from the Context — only `cw leave` does.
 
 ---
 
@@ -172,28 +189,29 @@ Output example (`--all`):
 ```
 REF   CONTEXT            WINDOW             ITERM TITLE               TABS  PANES
 ────────────────────────────────────────────────────────────────────────────────────
-#1    ● MyProject        Development        dev-server                   3      5
-#2    ● MyProject        Infrastructure     ssh                          1      2
-#3    ○ —                —                  random-terminal              1      1
+1     ● MyProject        Development        dev-server                   3      5
+2     ● MyProject        Infrastructure     ssh                          1      2
+3     ○ —                —                  random-terminal              1      1
 ```
 
-The ref numbers (#1, #2, ...) can be used with `cw join --ref` to add untracked windows to a Context.
+The ref numbers can be used directly: `cw join MyContext 3` or `cw go 3`.
 
 ---
 
-## `cw focus <name>`
+## `cw go [<name>]`
 
 Jump to a Context window (bring it to front).
 
 When only a Context name is given (no `/WindowName`), focuses the **last used window** in that context — not the first one. This is tracked automatically as you switch between windows.
 
 ```bash
-cw focus MyProject                   # Last used window in MyProject
-cw focus MyProject/Development       # Specific window
-cw focus -                           # Jump back to previous Context
+cw go MyProject                      # Last used window in MyProject
+cw go MyProject/Development          # Specific window
+cw go -                              # Jump back to previous Context
+cw go 3                              # Window 3 from `cw windows --all`
 ```
 
-Use `cw focus -` to toggle between two Contexts (like `cd -` in the shell).
+Use `cw go -` to toggle between two Contexts (like `cd -` in the shell).
 
 ---
 

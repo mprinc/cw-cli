@@ -1,4 +1,4 @@
-Synced with commit: 05a75c6
+Synced with commit: b96a2e6
 
 # Contextual-Walker
 
@@ -40,22 +40,24 @@ source ~/.bashrc   # or ~/.zshrc depending on your shell
 ## Quick start
 
 ```bash
-cw create MyProject          # Track current window as "MyProject"
-cw join MyProject             # Add another window to the same Context
-cw join MyProject --ref 3     # Add window #3 (from cw windows --all)
-cw list                       # See all Contexts with live status
-cw windows                    # Show windows in current Context
+cw create MyProject           # Create empty Context
+cw create MyProject -a        # Create + add current window
+cw join MyProject             # Add current window to Context
+cw join MyProject 3           # Add window 3 (from cw windows --all)
+cw leave                      # Remove current window from its Context
+cw list                       # All Contexts with live status
+cw windows                    # Windows in current Context
 cw windows -vv                # With tabs + panes + CWDs
 cw windows --all              # ALL iTerm windows (tracked + untracked)
-cw windows --untracked        # Only untracked windows
-cw focus MyProject            # Jump to last used window in Context
-cw focus -                    # Jump back to previous Context
+cw go MyProject               # Jump to last used window in Context
+cw go 3                       # Jump to window 3
+cw go -                       # Jump back to previous Context
 cw close MyProject            # Save state and close all windows
 cw open MyProject             # Restore everything
 cw save                       # Force a snapshot
 cw history MyProject          # View snapshots
 cw backup                     # Backup database
-cw reload                     # Reload daemon code (no iTerm restart needed)
+cw reload                     # Reload daemon code (no iTerm restart)
 ```
 
 ## Install with custom backup directory

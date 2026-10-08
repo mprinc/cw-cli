@@ -1,4 +1,4 @@
-Synced with commit: 05a75c6
+Synced with commit: b96a2e6
 
 # CW Архитектура
 
@@ -59,7 +59,7 @@ Synced with commit: 05a75c6
 
 Click-based CLI који комуницира са daemon-ом преко Unix socket-а. За read-only операције (history) чита директно из SQLite.
 
-Команде: `list`, `create`, `join`, `open`, `close`, `save`, `history`, `windows`, `focus`, `reload`, `status`, `backup`, `config`, `completion`
+Команде: `list`, `create`, `join`, `leave`, `open`, `close`, `save`, `history`, `windows`, `go`, `reload`, `status`, `backup`, `config`, `completion`
 
 ### 3. SQLite база (`src/cw/db.py`)
 

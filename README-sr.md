@@ -1,4 +1,4 @@
-Synced with commit: 05a75c6
+Synced with commit: b96a2e6
 
 # Contextual-Walker
 
@@ -39,16 +39,18 @@ source ~/.bashrc   # или ~/.zshrc зависно од shell-а
 ## Брзи почетак
 
 ```bash
-cw create МојПројекат          # Прати тренутни прозор као "МојПројекат"
-cw join МојПројекат             # Додај други прозор у исти Context
-cw join МојПројекат --ref 3     # Додај прозор #3 (из cw windows --all)
-cw list                         # Прикажи све Context-е са живим статусом
+cw create МојПројекат           # Празан Context
+cw create МојПројекат -a        # Креирај + додај тренутни прозор
+cw join МојПројекат             # Додај тренутни прозор
+cw join МојПројекат 3           # Додај прозор 3 (из cw windows --all)
+cw leave                        # Уклони тренутни прозор из контекста
+cw list                         # Сви Context-и са живим статусом
 cw windows                      # Прозори тренутног Context-а
 cw windows -vv                  # Са табовима + панелима + CWD
 cw windows --all                # СВИ iTerm прозори
-cw windows --untracked          # Само неуправљани прозори
-cw focus МојПројекат            # Скочи на задњи кориштени прозор
-cw focus -                      # Врати се на претходни Context
+cw go МојПројекат               # Скочи на задњи кориштени прозор
+cw go 3                         # Скочи на прозор 3
+cw go -                         # Врати се на претходни Context
 cw close МојПројекат            # Сачувај и затвори
 cw open МојПројекат             # Врати све назад
 cw save                         # Форсирај snapshot
