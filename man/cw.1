@@ -30,9 +30,9 @@ config
 View or update CW configuration.
 .TP
 create
-Create a new Context and assign the current iTerm window to...
+Create a new Context.
 .TP
-focus
+go
 Jump to a Context window (bring it to front).
 .TP
 history
@@ -41,11 +41,17 @@ Show state history (snapshots) for a Context.
 join
 Add a window to an existing Context.
 .TP
+leave
+Remove the current window from its Context.
+.TP
 list
 Show all Contexts with their live status.
 .TP
 open
 Restore closed windows of a Context.
+.TP
+reload
+Reload daemon code without restarting iTerm2.
 .TP
 save
 Force an explicit snapshot of a Context (or all Contexts).

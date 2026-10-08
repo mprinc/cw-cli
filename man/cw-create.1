@@ -7,13 +7,26 @@ cw \- cw create
 \fI\,create \/\fR[\fI\,OPTIONS\/\fR] \fI\,NAME\/\fR
 .SH DESCRIPTION
 .IP
-Create a new Context and assign the current iTerm window to it.
+Create a new Context.
 .IP
-The focused window becomes the first member of the new Context.
+By default creates an empty Context. Use \fB\-a\fR to also add the current window.
+.IP
+Examples:
+.TP
+cw create MyProject
+empty Context
+.TP
+cw create MyProject \fB\-a\fR
+create + add current window
+.IP
+cw create MyProject \fB\-a\fR \fB\-d\fR "Frontend dev"
 .SH OPTIONS
 .TP
 \fB\-d\fR, \fB\-\-description\fR TEXT
 Optional description for the Context.
+.TP
+\fB\-a\fR, \fB\-\-add\fR
+Also add the current window to the new Context.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Show this message and exit.
