@@ -303,25 +303,42 @@ def cmd_rename(target: str, new_name: str):
 # ─── cw leave ──────────────────────────────────────────────────────
 
 @main.command("leave")
+@click.argument("target", required=False)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-def cmd_leave(yes: bool):
+def cmd_leave(target: str | None, yes: bool):
     """
-    Remove the current window from its Context.
+    Remove a window from its Context.
 
-    The window stays open in iTerm but is no longer tracked by CW.
-    This is an explicit membership change — closing a window does NOT
-    remove it from the Context.
+    Without TARGET, removes the current (focused) window.
+    TARGET can be Context/Window, a ref number, or an iTerm title.
+
+    \b
+    Examples:
+      cw leave                         current window
+      cw leave LitTerra/ДРУЖБА         specific window by name
+      cw leave 14                      by ref number
+      cw leave IoT                     by iTerm title
     """
-    response = _daemon_required("leave", {"confirm": yes})
+    args: dict = {"confirm": yes}
+    if target is not None:
+        try:
+            args["ref"] = int(target)
+        except ValueError:
+            if "/" in target:
+                args["context_window"] = target
+            else:
+                args["iterm_title"] = target
+
+    response = _daemon_required("leave", args)
     if not response.get("ok"):
         error = response.get("error", "")
         if error == "confirm":
-            # Daemon asks for confirmation
             data = response.get("data", {})
             ctx = data.get("context_name", "?")
             win = data.get("window_name", "?")
             if click.confirm(f"Remove window \"{win}\" from Context \"{ctx}\"?"):
-                response = _daemon_required("leave", {"confirm": True})
+                args["confirm"] = True
+                response = _daemon_required("leave", args)
                 if response.get("ok"):
                     click.echo(f"✓ Window \"{win}\" removed from \"{ctx}\".")
                 else:
@@ -362,24 +379,63 @@ def cmd_open(name: str):
 # ─── cw close ──────────────────────────────────────────────────────
 
 @main.command("close")
-@click.argument("name")
-def cmd_close(name: str):
+@click.argument("name", required=False)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation when closing current window.")
+def cmd_close(name: str | None, yes: bool):
     """
     Save state and close windows of a Context.
 
+    Without NAME, closes the current window (asks for confirmation).
     NAME can be "ContextName" (close all) or "ContextName/WindowName" (one window).
     State is saved before closing — if save fails, close is aborted.
+
+    \b
+    Examples:
+      cw close                         close current window (confirm)
+      cw close -y                      close current window (no confirm)
+      cw close MyProject               close all windows in Context
+      cw close MyProject/Development   close one window
     """
-    response = _daemon_required("close", {"name": name})
-    if response.get("ok"):
-        closed = response["data"].get("closed_windows", 0)
-        if closed == 0:
-            click.echo("No open windows to close (already closed?).")
+    if name is None:
+        # Close current window — need to find which context it belongs to
+        response = _daemon_required("close_current", {"confirm": yes})
+        if not response.get("ok"):
+            error = response.get("error", "")
+            if error == "confirm":
+                data = response.get("data", {})
+                ctx = data.get("context_name", "?")
+                win = data.get("window_name", "?")
+                prompt = (
+                    "Close the "
+                    + click.style("current", bold=True, fg="yellow")
+                    + f" window \"{win}\" in Context \"{ctx}\"?"
+                )
+                if click.confirm(prompt):
+                    response = _daemon_required("close_current", {"confirm": True})
+                    if response.get("ok"):
+                        click.echo(f"✓ Saved and closed \"{win}\".")
+                    else:
+                        click.echo(f"Error: {response.get('error')}", err=True)
+                        sys.exit(1)
+                else:
+                    click.echo("Cancelled.")
+            else:
+                click.echo(f"Error: {error}", err=True)
+                sys.exit(1)
         else:
-            click.echo(f"✓ Saved and closed {closed} window(s).")
+            data = response.get("data", {})
+            click.echo(f"✓ Saved and closed \"{data.get('window_name', '?')}\".")
     else:
-        click.echo(f"Error: {response.get('error')}", err=True)
-        sys.exit(1)
+        response = _daemon_required("close", {"name": name})
+        if response.get("ok"):
+            closed = response["data"].get("closed_windows", 0)
+            if closed == 0:
+                click.echo("No open windows to close (already closed?).")
+            else:
+                click.echo(f"✓ Saved and closed {closed} window(s).")
+        else:
+            click.echo(f"Error: {response.get('error')}", err=True)
+            sys.exit(1)
 
 
 # ─── cw save ───────────────────────────────────────────────────────

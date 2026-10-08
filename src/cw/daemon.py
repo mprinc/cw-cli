@@ -412,6 +412,7 @@ def _get_handler(command: str):
         "focus_ref": _cmd_focus_ref,
         "focus_title": _cmd_focus_title,
         "leave": _cmd_leave,
+        "close_current": _cmd_close_current,
         "rename": _cmd_rename,
         "_complete_iterm_titles": _cmd_complete_iterm_titles,
     }
@@ -608,20 +609,76 @@ async def _cmd_join(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
 async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     """
-    Remove the current window from its Context (explicit membership change).
+    Remove a window from its Context (explicit membership change).
 
     The window stays open in iTerm but CW stops tracking it.
     Requires confirmation unless args["confirm"] is True.
 
-    @param args: {"confirm": bool}
-    """
-    iterm_window = app.current_terminal_window
-    if not iterm_window:
-        return {"ok": False, "error": "No focused iTerm window found"}
+    Target resolution (in order):
+    - args["ref"]: ref number from cw windows --all
+    - args["context_window"]: "Context/Window" path
+    - args["iterm_title"]: iTerm window title
+    - (default): current focused window
 
-    cw_id = database.get_cw_id_for_iterm(iterm_window.window_id)
+    @param args: {"confirm": bool, "ref": int?, "context_window": str?, "iterm_title": str?}
+    """
+    # Resolve which window to remove
+    ref = args.get("ref")
+    context_window = args.get("context_window")
+    iterm_title_query = args.get("iterm_title")
+
+    cw_id = None
+    iterm_window = None
+
+    if ref is not None:
+        # By ref number
+        try:
+            ref_index = int(ref) - 1
+            windows_list = list(app.terminal_windows)
+            if ref_index < 0 or ref_index >= len(windows_list):
+                return {"ok": False, "error": f"Invalid ref {ref}"}
+            iterm_window = windows_list[ref_index]
+            cw_id = database.get_cw_id_for_iterm(iterm_window.window_id)
+        except (ValueError, TypeError):
+            return {"ok": False, "error": f"Invalid ref: {ref}"}
+    elif context_window:
+        # By Context/Window path
+        ctx_name, _, win_name = context_window.partition("/")
+        context = database.get_context_by_name(ctx_name)
+        if not context:
+            return {"ok": False, "error": f"Context '{ctx_name}' not found"}
+        for w in context.windows:
+            if w.name == win_name and w.is_member:
+                cw_id = w.id
+                iterm_id = database.get_iterm_id_for_cw(w.id)
+                if iterm_id:
+                    iterm_window = app.get_window_by_id(iterm_id)
+                break
+        if not cw_id:
+            return {"ok": False, "error": f"Window '{win_name}' not found in '{ctx_name}'"}
+    elif iterm_title_query:
+        # By iTerm title
+        query_lower = iterm_title_query.lower()
+        for w in app.terminal_windows:
+            try:
+                title = await w.async_get_variable("titleOverride") or ""
+            except Exception:
+                title = ""
+            if title.lower() == query_lower or query_lower in title.lower():
+                iterm_window = w
+                cw_id = database.get_cw_id_for_iterm(w.window_id)
+                break
+        if not cw_id:
+            return {"ok": False, "error": f"No tracked window matching '{iterm_title_query}'"}
+    else:
+        # Default: current focused window
+        iterm_window = app.current_terminal_window
+        if not iterm_window:
+            return {"ok": False, "error": "No focused iTerm window found"}
+        cw_id = database.get_cw_id_for_iterm(iterm_window.window_id)
+
     if not cw_id:
-        return {"ok": False, "error": "Current window is not tracked by any Context"}
+        return {"ok": False, "error": "Window is not tracked by any Context"}
 
     cw_window = database.get_window_by_id(cw_id)
     if not cw_window:
@@ -827,6 +884,72 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
     database.save_snapshot(context.id, "context_opened")
     return {"ok": True, "data": {"restored_windows": restored_count}}
+
+
+async def _cmd_close_current(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Close the currently focused window: save state, then close in iTerm.
+
+    Requires confirmation unless args["confirm"] is True.
+
+    @param args: {"confirm": bool}
+    """
+    iterm_window = app.current_terminal_window
+    if not iterm_window:
+        return {"ok": False, "error": "No focused iTerm window found"}
+
+    cw_id = database.get_cw_id_for_iterm(iterm_window.window_id)
+    if not cw_id:
+        return {"ok": False, "error": "Current window is not tracked by any Context"}
+
+    cw_window = database.get_window_by_id(cw_id)
+    if not cw_window:
+        return {"ok": False, "error": "Window not found in database"}
+
+    context = database.get_context_by_id(cw_window.context_id)
+    context_name = context.name if context else "?"
+
+    # Ask for confirmation if not already confirmed
+    if not args.get("confirm"):
+        return {
+            "ok": False,
+            "error": "confirm",
+            "data": {
+                "context_name": context_name,
+                "window_name": cw_window.name,
+            },
+        }
+
+    # Save current state
+    try:
+        window_state = await read_iterm_window_state(iterm_window)
+        database.update_window_state(
+            cw_id,
+            frame_x=window_state["frame_x"],
+            frame_y=window_state["frame_y"],
+            frame_width=window_state["frame_width"],
+            frame_height=window_state["frame_height"],
+            fullscreen=window_state["fullscreen"],
+        )
+        database.sync_window_layout(cw_id, window_state["tabs"])
+    except Exception:
+        logger.exception("Failed to save window '%s' — aborting close", cw_window.name)
+        return {"ok": False, "error": f"Could not safely save window '{cw_window.name}'. Close aborted."}
+
+    # Save snapshot before closing
+    if context:
+        database.save_snapshot(context.id, "before_close")
+
+    # Close in iTerm and mark as closed
+    try:
+        await iterm_window.async_close(force=True)
+    except Exception:
+        logger.exception("Failed to close iTerm window — marking closed anyway")
+    database.update_window_state(cw_id, is_open=False)
+    database.deactivate_mappings_for_cw_id(cw_id)
+
+    logger.info("Closed current window '%s' in context '%s'", cw_window.name, context_name)
+    return {"ok": True, "data": {"context_name": context_name, "window_name": cw_window.name}}
 
 
 async def _cmd_close(args: dict, app: iterm2.App, database: CwDatabase) -> dict:

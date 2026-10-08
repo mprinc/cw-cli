@@ -102,7 +102,7 @@ for c in candidates:
     if [ "$COMP_CWORD" -eq 2 ]; then
         # First argument after command — context names (or target for go/rename)
         case "$cmd" in
-            open|close|save|history|join|windows|rename)
+            open|close|save|history|join|leave|windows|rename)
                 if [[ "$cur" == */* ]]; then
                     local ctx_name="${cur%%/*}"
                     local win_query="${cur#*/}"
@@ -114,13 +114,13 @@ for c in candidates:
                     mapfile -t escaped < <(_cw_escape "${matches[@]/#/${ctx_name}/}")
                     COMPREPLY=( "${escaped[@]}" )
                 else
+                    # Append / instead of space so user can continue to window name
+                    compopt -o nospace
                     local -a contexts
                     mapfile -t contexts < <(_cw_list_contexts 2>/dev/null)
                     local -a matches
                     mapfile -t matches < <(_cw_fuzzy_match "$cur" "${contexts[@]}")
-                    local -a escaped
-                    mapfile -t escaped < <(_cw_escape "${matches[@]}")
-                    COMPREPLY=( "${escaped[@]}" )
+                    COMPREPLY=( "${matches[@]/%//}" )
                 fi
                 ;;
             go)
@@ -135,15 +135,21 @@ for c in candidates:
                     mapfile -t escaped < <(_cw_escape "${matches[@]/#/${ctx_name}/}")
                     COMPREPLY=( "${escaped[@]}" )
                 else
-                    local -a contexts titles all_items
+                    compopt -o nospace
+                    # Context names get / suffix, iTerm titles get space
+                    local -a contexts ctx_matches
                     mapfile -t contexts < <(_cw_list_contexts 2>/dev/null)
+                    mapfile -t ctx_matches < <(_cw_fuzzy_match "$cur" "${contexts[@]}")
+                    local -a titles title_matches
                     mapfile -t titles < <(_cw_list_iterm_titles_all 2>/dev/null)
-                    all_items=( "${contexts[@]}" "${titles[@]}" )
-                    local -a matches
-                    mapfile -t matches < <(_cw_fuzzy_match "$cur" "${all_items[@]}")
-                    local -a escaped
-                    mapfile -t escaped < <(_cw_escape "${matches[@]}")
-                    COMPREPLY=( "${escaped[@]}" )
+                    mapfile -t title_matches < <(_cw_fuzzy_match "$cur" "${titles[@]}")
+                    # Context names with / suffix
+                    COMPREPLY=( "${ctx_matches[@]/%//}" )
+                    # iTerm titles with space suffix
+                    local t
+                    for t in "${title_matches[@]}"; do
+                        [ -n "$t" ] && COMPREPLY+=( "$t " )
+                    done
                 fi
                 ;;
             completion)
