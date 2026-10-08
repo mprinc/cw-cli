@@ -245,33 +245,56 @@ def cmd_create(name: str, description: str, add: bool):
 
 @main.command("join")
 @click.argument("name")
-@click.argument("window_ref", required=False)
+@click.argument("target", required=False)
 @click.option("--window-name", "-w", default="", help="Name for this window within the Context.")
-def cmd_join(name: str, window_ref: str | None, window_name: str):
+def cmd_join(name: str, target: str | None, window_name: str):
     """
     Add a window to an existing Context.
 
-    By default adds the current (focused) window. Pass a number to add
-    a specific window by its ref from `cw windows --all`.
+    TARGET can be a ref number or an iTerm window title.
+    If omitted, adds the current (focused) window.
 
     \b
     Examples:
       cw join MyProject              add current window
-      cw join MyProject 3            add window #3
-      cw join MyProject 3 -w Dev     add window #3, name it "Dev"
+      cw join MyProject 3            add window by ref number
+      cw join MyProject IoT          add window by iTerm title
+      cw join MyProject IoT -w Dev   add and name it "Dev"
     """
     args = {"name": name, "window_name": window_name}
-    if window_ref is not None:
+    if target is not None:
         try:
-            args["ref"] = int(window_ref)
+            args["ref"] = int(target)
         except ValueError:
-            click.echo(f"Error: ref must be a number (got '{window_ref}')", err=True)
-            sys.exit(1)
+            # Not a number — treat as iTerm window title
+            args["iterm_title"] = target
 
     response = _daemon_required("join", args)
     if response.get("ok"):
-        source = f"Window #{window_ref}" if window_ref else "Current window"
+        source = f"\"{target}\"" if target else "Current window"
         click.echo(f"✓ {source} joined context '{name}'.")
+    else:
+        click.echo(f"Error: {response.get('error')}", err=True)
+        sys.exit(1)
+
+
+# ─── cw rename ─────────────────────────────────────────────────────
+
+@main.command("rename")
+@click.argument("target")
+@click.argument("new_name")
+def cmd_rename(target: str, new_name: str):
+    """
+    Rename a Context or a Window within a Context.
+
+    \b
+    Examples:
+      cw rename OldName NewName                rename Context
+      cw rename MyProject/OldWin NewWinName    rename Window
+    """
+    response = _daemon_required("rename", {"target": target, "new_name": new_name})
+    if response.get("ok"):
+        click.echo(f"✓ Renamed to '{new_name}'.")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
@@ -534,23 +557,28 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
 @click.argument("target")
 def cmd_go(target: str):
     """
-    Jump to a Context window (bring it to front).
+    Jump to a window (bring it to front).
 
-    A number jumps by ref from `cw windows --all`. A name jumps by Context.
+    TARGET can be a Context name, Context/Window, ref number,
+    iTerm window title, or "-" to jump back.
 
     \b
     Examples:
       cw go MyProject                last used window in Context
-      cw go MyProject/Development    specific window
+      cw go MyProject/Development    specific window by CW name
       cw go -                        jump back to previous Context
-      cw go 3                        window #3 from `cw windows --all`
+      cw go 3                        window by ref number
+      cw go IoT                      window by iTerm title
     """
-    # Number = ref, anything else = context name
+    # Number = ref
     try:
         ref = int(target)
         response = _daemon_required("focus_ref", {"ref": ref})
     except ValueError:
+        # Try as context name first, fall back to iTerm title
         response = _daemon_required("focus", {"name": target})
+        if not response.get("ok") and "not found" in response.get("error", ""):
+            response = _daemon_required("focus_title", {"title": target})
 
     if response.get("ok"):
         data = response["data"]

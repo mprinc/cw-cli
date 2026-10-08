@@ -40,7 +40,7 @@ _cw_completions() {
     local cur prev commands
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    commands="list create join leave open close save history status windows go reload backup config completion"
+    commands="list create join leave open close save history status windows go rename reload backup config completion"
 
     # Complete subcommand
     if [ "$COMP_CWORD" -eq 1 ]; then
@@ -48,25 +48,104 @@ _cw_completions() {
         return
     fi
 
-    # Complete context names for commands that need them
-    case "$prev" in
-        open|close|save|history|join|windows|go)
-            local contexts
-            contexts=$(_cw_list_contexts 2>/dev/null)
-            # Support Context/Window completion
-            if [[ "$cur" == */* ]]; then
-                local ctx_name="${cur%%/*}"
-                local windows
-                windows=$(_cw_list_windows "$ctx_name" 2>/dev/null)
-                COMPREPLY=( $(compgen -P "${ctx_name}/" -W "$windows" -- "${cur#*/}") )
-            else
-                COMPREPLY=( $(compgen -W "$contexts" -- "$cur") )
-            fi
-            ;;
-        completion)
-            COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
-            ;;
-    esac
+    # Determine which argument position we're completing
+    local cmd="${COMP_WORDS[1]}"
+
+    if [ "$COMP_CWORD" -eq 2 ]; then
+        # First argument after command — context names (or target for go/rename)
+        case "$cmd" in
+            open|close|save|history|join|windows|rename)
+                local contexts
+                contexts=$(_cw_list_contexts 2>/dev/null)
+                if [[ "$cur" == */* ]]; then
+                    local ctx_name="${cur%%/*}"
+                    local windows
+                    windows=$(_cw_list_windows "$ctx_name" 2>/dev/null)
+                    COMPREPLY=( $(compgen -P "${ctx_name}/" -W "$windows" -- "${cur#*/}") )
+                else
+                    COMPREPLY=( $(compgen -W "$contexts" -- "$cur") )
+                fi
+                ;;
+            go)
+                # go accepts context names, context/window, AND iTerm titles
+                local contexts titles combined
+                contexts=$(_cw_list_contexts 2>/dev/null)
+                titles=$(_cw_list_iterm_titles_all 2>/dev/null)
+                combined="$contexts $titles"
+                if [[ "$cur" == */* ]]; then
+                    local ctx_name="${cur%%/*}"
+                    local windows
+                    windows=$(_cw_list_windows "$ctx_name" 2>/dev/null)
+                    COMPREPLY=( $(compgen -P "${ctx_name}/" -W "$windows" -- "${cur#*/}") )
+                else
+                    COMPREPLY=( $(compgen -W "$combined" -- "$cur") )
+                fi
+                ;;
+            completion)
+                COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
+                ;;
+        esac
+    elif [ "$COMP_CWORD" -eq 3 ]; then
+        # Second argument — depends on command
+        case "$cmd" in
+            join)
+                # Complete iTerm window titles (untracked windows)
+                local titles
+                titles=$(_cw_list_iterm_titles 2>/dev/null)
+                COMPREPLY=( $(compgen -W "$titles" -- "$cur") )
+                ;;
+        esac
+    fi
+}
+
+# Read iTerm window titles via daemon socket (for join completion)
+_cw_list_iterm_titles() {
+    python3 -c "
+import socket, json
+from cw.constants import SOCKET_PATH, SOCKET_BUFFER_SIZE
+if SOCKET_PATH.exists():
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(2)
+    try:
+        s.connect(str(SOCKET_PATH))
+        s.sendall(json.dumps({'cmd':'_complete_iterm_titles','args':{'filter':'untracked'}}).encode())
+        data = b''
+        while True:
+            chunk = s.recv(SOCKET_BUFFER_SIZE)
+            if not chunk: break
+            data += chunk
+        resp = json.loads(data)
+        if resp.get('ok'):
+            for t in resp['data']['titles']:
+                print(t)
+    except: pass
+    finally: s.close()
+" 2>/dev/null
+}
+
+# Read ALL iTerm window titles via daemon (for go completion)
+_cw_list_iterm_titles_all() {
+    python3 -c "
+import socket, json
+from cw.constants import SOCKET_PATH, SOCKET_BUFFER_SIZE
+if SOCKET_PATH.exists():
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(2)
+    try:
+        s.connect(str(SOCKET_PATH))
+        s.sendall(json.dumps({'cmd':'_complete_iterm_titles','args':{'filter':'all'}}).encode())
+        data = b''
+        while True:
+            chunk = s.recv(SOCKET_BUFFER_SIZE)
+            if not chunk: break
+            data += chunk
+        resp = json.loads(data)
+        if resp.get('ok'):
+            for t in resp['data']['titles']:
+                print(t)
+    except: pass
+    finally: s.close()
+" 2>/dev/null
 }
 
 # Read context names from CW database
@@ -123,6 +202,7 @@ _cw() {
         'status:Show daemon status'
         'windows:Show windows in a Context'
         'go:Jump to a Context window'
+        'rename:Rename a Context or Window'
         'reload:Reload daemon code'
         'backup:Backup database'
         'config:View or update configuration'
@@ -134,24 +214,33 @@ _cw() {
         return
     fi
 
-    case "${words[2]}" in
-        open|close|save|history|join|windows|go)
-            # Complete context names, support Context/Window
-            if [[ "${words[CURRENT]}" == */* ]]; then
-                local ctx_name="${words[CURRENT]%%/*}"
-                local -a windows
-                windows=( $(_cw_list_windows "$ctx_name") )
-                _describe 'window' windows -P "${ctx_name}/"
-            else
-                contexts=( $(_cw_list_contexts) )
-                # Add trailing / to suggest further completion
-                compadd -S '/' -q -- "${contexts[@]}"
-            fi
-            ;;
-        completion)
-            _values 'shell' bash zsh fish
-            ;;
-    esac
+    if (( CURRENT == 3 )); then
+        case "${words[2]}" in
+            open|close|save|history|join|windows|go|rename)
+                if [[ "${words[CURRENT]}" == */* ]]; then
+                    local ctx_name="${words[CURRENT]%%/*}"
+                    local -a windows
+                    windows=( $(_cw_list_windows "$ctx_name") )
+                    _describe 'window' windows -P "${ctx_name}/"
+                else
+                    contexts=( $(_cw_list_contexts) )
+                    compadd -S '/' -q -- "${contexts[@]}"
+                fi
+                ;;
+            completion)
+                _values 'shell' bash zsh fish
+                ;;
+        esac
+    elif (( CURRENT == 4 )); then
+        case "${words[2]}" in
+            join)
+                # Complete iTerm window titles for second arg
+                local -a titles
+                titles=( $(_cw_list_iterm_titles) )
+                compadd -- "${titles[@]}"
+                ;;
+        esac
+    fi
 }
 
 _cw_list_contexts() {
@@ -182,6 +271,30 @@ if DB_PATH.exists():
 " 2>/dev/null
 }
 
+_cw_list_iterm_titles() {
+    python3 -c "
+import socket, json
+from cw.constants import SOCKET_PATH, SOCKET_BUFFER_SIZE
+if SOCKET_PATH.exists():
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(2)
+    try:
+        s.connect(str(SOCKET_PATH))
+        s.sendall(json.dumps({'cmd':'_complete_iterm_titles','args':{'filter':'untracked'}}).encode())
+        data = b''
+        while True:
+            chunk = s.recv(SOCKET_BUFFER_SIZE)
+            if not chunk: break
+            data += chunk
+        resp = json.loads(data)
+        if resp.get('ok'):
+            for t in resp['data']['titles']:
+                print(t)
+    except: pass
+    finally: s.close()
+" 2>/dev/null
+}
+
 compdef _cw cw
 '''
 
@@ -192,7 +305,7 @@ def _fish_completion() -> str:
 # Generated by: cw completion fish
 
 # Subcommands
-set -l cw_commands list create join leave open close save history status windows go reload backup config completion
+set -l cw_commands list create join leave open close save history status windows go rename reload backup config completion
 
 # Disable file completions for cw
 complete -c cw -f
@@ -209,13 +322,14 @@ complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "history" -d
 complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "status" -d "Show daemon status"
 complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "windows" -d "Show windows in Context"
 complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "go" -d "Jump to Context window"
+complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "rename" -d "Rename Context or Window"
 complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "reload" -d "Reload daemon code"
 complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "backup" -d "Backup database"
 complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "config" -d "View/update configuration"
 complete -c cw -n "not __fish_seen_subcommand_from $cw_commands" -a "completion" -d "Output completion script"
 
 # Context name completions for relevant subcommands
-for cmd in open close save history join windows go
+for cmd in open close save history join windows go rename
     complete -c cw -n "__fish_seen_subcommand_from $cmd" -a "(python3 -c '
 from cw.db import CwDatabase
 from cw.constants import DB_PATH

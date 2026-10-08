@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import iterm2
@@ -409,7 +410,10 @@ def _get_handler(command: str):
         "all_windows": _cmd_all_windows,
         "focus": _cmd_focus,
         "focus_ref": _cmd_focus_ref,
+        "focus_title": _cmd_focus_title,
         "leave": _cmd_leave,
+        "rename": _cmd_rename,
+        "_complete_iterm_titles": _cmd_complete_iterm_titles,
     }
     return handlers.get(command)
 
@@ -531,18 +535,34 @@ async def _cmd_join(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     if not context:
         return {"ok": False, "error": f"Context '{name}' not found"}
 
-    # Determine target window: --ref number or current focused window
+    # Determine target window: ref number, iTerm title, or current focused window
     ref = args.get("ref")
+    iterm_title_query = args.get("iterm_title")
+
     if ref is not None:
         # Find window by ref number (1-based index into app.terminal_windows)
         try:
             ref_index = int(ref) - 1
             windows_list = list(app.terminal_windows)
             if ref_index < 0 or ref_index >= len(windows_list):
-                return {"ok": False, "error": f"Invalid ref #{ref} — use `cw windows --all` to see refs"}
+                return {"ok": False, "error": f"Invalid ref {ref} — use `cw windows --all` to see refs"}
             iterm_window = windows_list[ref_index]
         except (ValueError, TypeError):
             return {"ok": False, "error": f"Invalid ref: {ref}"}
+    elif iterm_title_query:
+        # Find window by iTerm title (case-insensitive substring match)
+        iterm_window = None
+        query_lower = iterm_title_query.lower()
+        for w in app.terminal_windows:
+            try:
+                title = await w.async_get_variable("titleOverride") or ""
+            except Exception:
+                title = ""
+            if title.lower() == query_lower or query_lower in title.lower():
+                iterm_window = w
+                break
+        if not iterm_window:
+            return {"ok": False, "error": f"No iTerm window with title matching '{iterm_title_query}'"}
     else:
         iterm_window = app.current_terminal_window
         if not iterm_window:
@@ -636,6 +656,105 @@ async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
     logger.info("Window '%s' left context '%s'", cw_window.name, context_name)
     return {"ok": True, "data": {"context_name": context_name, "window_name": cw_window.name}}
+
+
+async def _cmd_rename(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Rename a Context or a Window within a Context.
+
+    @param args: {"target": "OldName" or "Context/Window", "new_name": "NewName"}
+    """
+    target = args.get("target", "").strip()
+    new_name = args.get("new_name", "").strip()
+    if not target or not new_name:
+        return {"ok": False, "error": "Both target and new_name are required"}
+
+    context_name, _, window_name = target.partition("/")
+    window_name = window_name.strip()
+
+    context = database.get_context_by_name(context_name)
+    if not context:
+        return {"ok": False, "error": f"Context '{context_name}' not found"}
+
+    if window_name:
+        # Rename a window within the context
+        target_window = None
+        for w in context.windows:
+            if w.name == window_name and w.is_member:
+                target_window = w
+                break
+        if not target_window:
+            return {"ok": False, "error": f"Window '{window_name}' not found in '{context_name}'"}
+
+        database.update_window_state(target_window.id, name=new_name)
+
+        # Update user variables on live iTerm window if it's open
+        iterm_id = database.get_iterm_id_for_cw(target_window.id)
+        if iterm_id:
+            iterm_window = app.get_window_by_id(iterm_id)
+            if iterm_window:
+                await _set_window_cw_vars(
+                    iterm_window, context.id, target_window.id,
+                    context.name, new_name,
+                )
+
+        logger.info("Renamed window '%s' → '%s' in context '%s'", window_name, new_name, context_name)
+    else:
+        # Rename the context itself
+        existing = database.get_context_by_name(new_name)
+        if existing:
+            return {"ok": False, "error": f"Context '{new_name}' already exists"}
+
+        with database.transaction() as cursor:
+            cursor.execute(
+                "UPDATE contexts SET name = ?, updated_at = ? WHERE id = ?",
+                (new_name, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"), context.id),
+            )
+
+        # Update user variables on all live windows
+        for w in context.windows:
+            if not w.is_open:
+                continue
+            iterm_id = database.get_iterm_id_for_cw(w.id)
+            if iterm_id:
+                iterm_window = app.get_window_by_id(iterm_id)
+                if iterm_window:
+                    await _set_window_cw_vars(
+                        iterm_window, context.id, w.id, new_name, w.name,
+                    )
+
+        logger.info("Renamed context '%s' → '%s'", context_name, new_name)
+
+    return {"ok": True}
+
+
+async def _cmd_complete_iterm_titles(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Return iTerm window titles for shell completion.
+
+    Used internally by completion scripts. Returns titles of
+    untracked windows (for `cw join`) or all windows.
+
+    @param args: {"filter": "untracked" | "all"}
+    """
+    filter_mode = args.get("filter", "all")
+    titles = []
+    for iterm_window in app.terminal_windows:
+        try:
+            title = await iterm_window.async_get_variable("titleOverride") or ""
+        except Exception:
+            title = ""
+        if not title:
+            continue
+
+        if filter_mode == "untracked":
+            cw_id = database.get_cw_id_for_iterm(iterm_window.window_id)
+            if cw_id:
+                continue  # skip tracked windows
+
+        titles.append(title)
+
+    return {"ok": True, "data": {"titles": titles}}
 
 
 async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
@@ -1077,6 +1196,32 @@ async def _cmd_focus_ref(args: dict, app: iterm2.App, database: CwDatabase) -> d
         return {"ok": True, "data": {"focused": f"#{ref} ({title})"}}
     except Exception as exc:
         return {"ok": False, "error": f"Failed to focus window: {exc}"}
+
+
+async def _cmd_focus_title(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Focus (jump to) a window by its iTerm title (case-insensitive match).
+
+    @param args: {"title": str}
+    """
+    query = args.get("title", "").strip()
+    if not query:
+        return {"ok": False, "error": "Window title is required"}
+
+    query_lower = query.lower()
+    for iterm_window in app.terminal_windows:
+        try:
+            title = await iterm_window.async_get_variable("titleOverride") or ""
+        except Exception:
+            title = ""
+        if title.lower() == query_lower or query_lower in title.lower():
+            try:
+                await iterm_window.async_activate()
+                return {"ok": True, "data": {"focused": title}}
+            except Exception as exc:
+                return {"ok": False, "error": f"Failed to focus window: {exc}"}
+
+    return {"ok": False, "error": f"No window with title matching '{query}'"}
 
 
 # ─── Window restore helper ────────────────────────────────────────
