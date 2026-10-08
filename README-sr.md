@@ -1,3 +1,5 @@
+Synced with commit: 91087a5
+
 # Contextual-Walker
 
 Систем за трајно чување и враћање радних контекста у iTerm2. Групише терминалске прозоре по пројекту, континуирано прати њихово стање и враћа их на захтјев.
@@ -29,7 +31,7 @@ cd Contextual-Walker
 bash scripts/install.sh
 
 # Активирај у тренутном shell-у (или отвори нови таб)
-source ~/.zshrc
+source ~/.bashrc   # или ~/.zshrc зависно од shell-а
 
 # Рестартуј iTerm2 (daemon се аутоматски покреће)
 ```
@@ -83,7 +85,8 @@ iTerm → Settings → Profiles → General → Badge:
 
 - [COMMANDS-sr.md](COMMANDS-sr.md) — детаљна референца команди (српски)
 - [COMMANDS.md](COMMANDS.md) — command reference (English)
-- [ARCHITECTURE-sr.md](ARCHITECTURE-sr.md) — детаљна архитектура
+- [ARCHITECTURE-sr.md](ARCHITECTURE-sr.md) — преглед архитектуре
+- [DEV/ARCHITECTURE-DISCUSSION.md](DEV/ARCHITECTURE-DISCUSSION.md) — детаљна архитектонска дискусија
 - [README.md](README.md) — овај фајл на енглеском
 
 ## Лиценца

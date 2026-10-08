@@ -1,3 +1,5 @@
+Synced with commit: 91087a5
+
 # Contextual-Walker
 
 Persistent context manager for iTerm2. Groups terminal windows by project, tracks their state continuously, and restores them on demand.
@@ -30,7 +32,7 @@ cd Contextual-Walker
 bash scripts/install.sh
 
 # Activate in current shell (or open a new tab)
-source ~/.zshrc
+source ~/.bashrc   # or ~/.zshrc depending on your shell
 
 # Restart iTerm2 (daemon auto-starts)
 ```
@@ -83,9 +85,10 @@ Each pane will then show e.g. `MyProject / Development` as a background badge.
 ## Documentation
 
 - [COMMANDS.md](COMMANDS.md) — full command reference
-- [ARCHITECTURE-sr.md](ARCHITECTURE-sr.md) — detailed architecture (Serbian)
-- [README-sr.md](README-sr.md) — this file in Serbian
 - [COMMANDS-sr.md](COMMANDS-sr.md) — command reference in Serbian
+- [ARCHITECTURE-sr.md](ARCHITECTURE-sr.md) — architecture overview (Serbian)
+- [DEV/ARCHITECTURE-DISCUSSION.md](DEV/ARCHITECTURE-DISCUSSION.md) — detailed architecture discussion (Serbian)
+- [README-sr.md](README-sr.md) — this file in Serbian
 
 ## License
 
