@@ -586,13 +586,14 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
 
             wname_part = f"{wname:<18}"
 
+            pre = f"  {ref_part} {tracked_icon} {ctx:<17} "
+            post = f" {title:<25} {win['tabs']:>3}  {win['panes']:>5}"
             if is_cur:
-                arrow = click.style("▶ ", bold=True, fg="yellow")
-                line = f"{ref_part} {tracked_icon} {ctx:<17} {wname_part} {title:<25} {win['tabs']:>3}  {win['panes']:>5}"
-                click.echo(arrow + click.style(line, underline=True))
+                arrow = click.style("▶", bold=True, fg="yellow")
+                wname_styled = click.style(f"{wname:<18}", underline=True)
+                click.echo(f"{pre}{arrow}{wname_styled}{post}")
             else:
-                line = f"{ref_part} {tracked_icon} {ctx:<17} {wname_part} {title:<25} {win['tabs']:>3}  {win['panes']:>5}"
-                click.echo(f"  {line}")
+                click.echo(f"{pre} {wname_part}{post}")
         if untracked:
             click.echo(f"\nTo add: cw join MyContext <ref>    To jump: cw go <ref>")
         return
