@@ -827,7 +827,7 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
         )
         # Set window title
         try:
-            await target_iterm_window.async_set_title(window_name)
+            await target_iterm_window.async_set_title(f"{context_name} / {window_name}")
         except Exception:
             pass
         database.save_snapshot(context.id, "tab_moved")
@@ -878,6 +878,12 @@ async def _cmd_refresh(args: dict, app: iterm2.App, database: CwDatabase) -> dic
             iterm_window, context.id, cw_window.id,
             context.name, cw_window.name,
         )
+        # Set window title to "Context / Window"
+        try:
+            title = f"{context.name} / {cw_window.name}"
+            await iterm_window.async_set_title(title)
+        except Exception:
+            pass
         refreshed += 1
 
     logger.info("Refreshed %d window(s)", refreshed)
