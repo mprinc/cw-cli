@@ -825,9 +825,14 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
             target_iterm_window, context.id, target_cw_window.id,
             context.name, window_name,
         )
-        # Set window title
+        # Set window title — wait for iTerm to finish its own title setup first
+        await asyncio.sleep(0.5)
         try:
-            await target_iterm_window.async_set_title(f"{context_name} / {window_name}")
+            # Refresh reference after move
+            app = await iterm2.async_get_app(app.connection)
+            fresh_window = app.get_window_by_id(target_iterm_window.window_id)
+            if fresh_window:
+                await fresh_window.async_set_title(f"{context_name} / {window_name}")
         except Exception:
             pass
         database.save_snapshot(context.id, "tab_moved")
