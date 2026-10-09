@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS panes (
     hostname        TEXT NOT NULL DEFAULT '',
     username        TEXT NOT NULL DEFAULT '',
     relative_size   REAL,
+    is_active       INTEGER NOT NULL DEFAULT 0,
     updated_at      TEXT NOT NULL
 );
 
@@ -151,6 +152,11 @@ class CwDatabase:
     def init_schema(self) -> None:
         """Create all tables and indexes if they don't exist."""
         self.conn.executescript(SCHEMA_SQL)
+        # Migration: add is_active column to panes if missing
+        try:
+            self.conn.execute("SELECT is_active FROM panes LIMIT 1")
+        except Exception:
+            self.conn.execute("ALTER TABLE panes ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         """Close the database connection."""
@@ -319,6 +325,7 @@ class CwDatabase:
                         hostname=pane_row["hostname"],
                         username=pane_row["username"],
                         relative_size=pane_row["relative_size"],
+                        is_active=bool(pane_row["is_active"]) if "is_active" in pane_row.keys() else False,
                     ))
                 window.tabs.append(tab)
             context.windows.append(window)
@@ -710,8 +717,8 @@ class CwDatabase:
                         """INSERT INTO panes
                            (id, tab_id, parent_pane_id, split_direction,
                             profile, title, cwd, hostname, username,
-                            relative_size, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            relative_size, is_active, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (pane_id, tab_id,
                          pane_data.get("parent_pane_id"),
                          pane_data.get("split_direction"),
@@ -721,6 +728,7 @@ class CwDatabase:
                          pane_data.get("hostname", ""),
                          pane_data.get("username", ""),
                          pane_data.get("relative_size"),
+                         int(pane_data.get("is_active", False)),
                          now),
                     )
                     # Map iTerm session ID → CW pane ID

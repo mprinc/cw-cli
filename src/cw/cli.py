@@ -680,7 +680,11 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
                         pane_num = click.style(f"({pane_index + 1})", bold=True)
                         pane_title = pane.title or pane.profile or ""
                         cwd_info = f"  [{pane.cwd}]" if pane.cwd else ""
-                        click.echo(f"      │   {connector} {pane_num} {pane_title}{cwd_info}")
+                        if pane.is_active:
+                            marker = click.style("▶", bold=True, fg="green")
+                            click.echo(f"      │   {connector} {marker}{pane_num} {pane_title}{cwd_info}")
+                        else:
+                            click.echo(f"      │   {connector}  {pane_num} {pane_title}{cwd_info}")
 
 
 # ─── cw move ───────────────────────────────────────────────────────

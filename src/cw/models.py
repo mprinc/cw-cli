@@ -43,6 +43,7 @@ class Pane:
     hostname: str = ""
     username: str = ""
     relative_size: float | None = None
+    is_active: bool = False
 
 
 @dataclass

@@ -63,6 +63,14 @@ async def read_iterm_window_state(iterm_window: iterm2.Window) -> dict:
 
     tabs_data = []
     for tab_index, iterm_tab in enumerate(iterm_window.tabs):
+        # Find the active session in this tab
+        active_session_id = None
+        try:
+            if iterm_tab.current_session:
+                active_session_id = iterm_tab.current_session.session_id
+        except Exception:
+            pass
+
         panes_data = []
         for iterm_session in iterm_tab.sessions:
             # Read pane/session properties safely
@@ -94,8 +102,9 @@ async def read_iterm_window_state(iterm_window: iterm2.Window) -> dict:
                 "hostname": session_hostname or "",
                 "username": session_username or "",
                 "profile": profile_name or "",
-                "split_direction": None,  # will be derived from layout
+                "split_direction": None,
                 "relative_size": None,
+                "is_active": iterm_session.session_id == active_session_id,
             })
 
         # Check if this tab is selected
