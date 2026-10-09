@@ -100,6 +100,11 @@ def _daemon_required(command: str, args: dict | None = None) -> dict:
         sys.exit(1)
 
 
+def _strip_trailing_slash(name: str) -> str:
+    """Strip trailing / from context names (added by tab completion)."""
+    return name.rstrip("/")
+
+
 # ─── Status indicators ────────────────────────────────────────────
 
 STATUS_ICONS = {
@@ -226,6 +231,7 @@ def cmd_create(name: str, description: str, add: bool):
       cw create MyProject -a         create + add current window
       cw create MyProject -a -d "Frontend dev"
     """
+    name = _strip_trailing_slash(name) if name else name
     response = _daemon_required("create", {"name": name, "description": description})
     if not response.get("ok"):
         click.echo(f"Error: {response.get('error')}", err=True)
@@ -261,6 +267,7 @@ def cmd_join(name: str, target: str | None, window_name: str):
       cw join MyProject IoT          add window by iTerm title
       cw join MyProject IoT -w Dev   add and name it "Dev"
     """
+    name = _strip_trailing_slash(name) if name else name
     args = {"name": name, "window_name": window_name}
     if target is not None:
         try:
@@ -292,6 +299,7 @@ def cmd_rename(target: str, new_name: str):
       cw rename OldName NewName                rename Context
       cw rename MyProject/OldWin NewWinName    rename Window
     """
+    target = _strip_trailing_slash(target) if target else target
     response = _daemon_required("rename", {"target": target, "new_name": new_name})
     if response.get("ok"):
         click.echo(f"✓ Renamed to '{new_name}'.")
@@ -319,6 +327,7 @@ def cmd_leave(target: str | None, yes: bool):
       cw leave 14                      by ref number
       cw leave IoT                     by iTerm title
     """
+    target = _strip_trailing_slash(target) if target else target
     args: dict = {"confirm": yes}
     if target is not None:
         try:
@@ -364,6 +373,7 @@ def cmd_open(name: str):
 
     NAME can be "ContextName" (restore all) or "ContextName/WindowName" (one window).
     """
+    name = _strip_trailing_slash(name) if name else name
     response = _daemon_required("open", {"name": name})
     if response.get("ok"):
         restored = response["data"].get("restored_windows", 0)
@@ -396,6 +406,7 @@ def cmd_close(name: str | None, yes: bool):
       cw close MyProject               close all windows in Context
       cw close MyProject/Development   close one window
     """
+    name = _strip_trailing_slash(name) if name else name
     if name is None:
         # Close current window — need to find which context it belongs to
         response = _daemon_required("close_current", {"confirm": yes})
@@ -448,6 +459,7 @@ def cmd_save(name: str | None):
 
     NAME is optional — if omitted, saves all Contexts.
     """
+    name = _strip_trailing_slash(name) if name else name
     args = {"name": name} if name else {}
     response = _daemon_required("save", args)
     if response.get("ok"):
@@ -469,6 +481,7 @@ def cmd_history(name: str, limit: int):
 
     This reads directly from the database — daemon not required.
     """
+    name = _strip_trailing_slash(name) if name else name
     from cw.db import CwDatabase
 
     if not DB_PATH.exists():
@@ -529,6 +542,7 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
     that you can use with `cw join` to add it to a Context:
       cw join MyProject 3
     """
+    name = _strip_trailing_slash(name) if name else name
     # ─── Mode: --all or --untracked (live iTerm windows) ───────────
     if show_all or untracked:
         filter_mode = "untracked" if untracked else "all"
@@ -632,6 +646,7 @@ def cmd_go(target: str):
       cw go 3                        window by ref number
       cw go IoT                      window by iTerm title
     """
+    target = _strip_trailing_slash(target) if target else target
     # Number = ref
     try:
         ref = int(target)
