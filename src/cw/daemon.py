@@ -415,6 +415,7 @@ def _get_handler(command: str):
         "close_current": _cmd_close_current,
         "rename": _cmd_rename,
         "refresh": _cmd_refresh,
+        "move_tab": _cmd_move_tab,
         "_complete_iterm_titles": _cmd_complete_iterm_titles,
     }
     return handlers.get(command)
@@ -723,6 +724,115 @@ async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
     logger.info("Window '%s' left context '%s'", cw_window.name, context_name)
     return {"ok": True, "data": {"context_name": context_name, "window_name": cw_window.name}}
+
+
+async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Move the current tab to a Context/Window.
+
+    If the Context or Window don't exist, asks for confirmation
+    before creating them.
+
+    @param args: {
+        "context_name": str,
+        "window_name": str,
+        "confirm_create": bool,
+        "create_context": bool (optional),
+        "create_window": bool (optional),
+    }
+    """
+    context_name = args.get("context_name", "").strip()
+    window_name = args.get("window_name", "").strip()
+    confirm_create = args.get("confirm_create", False)
+
+    if not context_name or not window_name:
+        return {"ok": False, "error": "Both context_name and window_name are required"}
+
+    # Get the current tab and session
+    current_window = app.current_terminal_window
+    if not current_window:
+        return {"ok": False, "error": "No focused iTerm window found"}
+    current_tab = current_window.current_tab
+    if not current_tab:
+        return {"ok": False, "error": "No current tab found"}
+
+    # Check if context exists
+    context = database.get_context_by_name(context_name)
+    if not context:
+        if not confirm_create:
+            return {"ok": False, "error": "confirm_context"}
+        # Create the context
+        context = database.create_context(context_name)
+        database.save_snapshot(context.id, "context_created")
+        logger.info("Created context '%s' for move_tab", context_name)
+
+    # Find target window in the context
+    target_cw_window = None
+    target_iterm_window = None
+    for w in context.windows:
+        if w.name == window_name and w.is_member:
+            target_cw_window = w
+            if w.is_open:
+                iterm_id = database.get_iterm_id_for_cw(w.id)
+                if iterm_id:
+                    target_iterm_window = app.get_window_by_id(iterm_id)
+            break
+
+    if not target_cw_window:
+        if not confirm_create and not args.get("create_window"):
+            return {"ok": False, "error": "confirm_window"}
+        # Create a new iTerm window and CW window
+        try:
+            # Move tab to a new window by creating one from the tab
+            target_iterm_window = await current_tab.async_move_to_new_window()
+            if not target_iterm_window:
+                return {"ok": False, "error": "Failed to create new window from tab"}
+        except Exception as exc:
+            logger.exception("Failed to move tab to new window")
+            return {"ok": False, "error": f"Failed to move tab: {exc}"}
+
+        # Register the new window in CW
+        window_state = await read_iterm_window_state(target_iterm_window)
+        target_cw_window = database.create_window(
+            context_id=context.id,
+            name=window_name,
+            frame_x=window_state["frame_x"],
+            frame_y=window_state["frame_y"],
+            frame_width=window_state["frame_width"],
+            frame_height=window_state["frame_height"],
+            fullscreen=window_state["fullscreen"],
+        )
+        database.set_mapping(target_cw_window.id, target_iterm_window.window_id, "window")
+        database.sync_window_layout(target_cw_window.id, window_state["tabs"])
+        await _set_window_cw_vars(
+            target_iterm_window, context.id, target_cw_window.id,
+            context.name, window_name,
+        )
+        # Set window title
+        try:
+            await target_iterm_window.async_set_title(window_name)
+        except Exception:
+            pass
+        database.save_snapshot(context.id, "tab_moved")
+        logger.info("Moved tab to new window '%s' in context '%s'", window_name, context_name)
+        return {"ok": True}
+
+    # Target window exists — move tab into it
+    if not target_iterm_window:
+        return {"ok": False, "error": f"Window '{window_name}' exists but is not open. Open it first with: cw open {context_name}/{window_name}"}
+
+    try:
+        await current_tab.async_move_to_window(target_iterm_window)
+    except Exception as exc:
+        logger.exception("Failed to move tab to existing window")
+        return {"ok": False, "error": f"Failed to move tab: {exc}"}
+
+    # Re-sync layout
+    window_state = await read_iterm_window_state(target_iterm_window)
+    database.sync_window_layout(target_cw_window.id, window_state["tabs"])
+    database.save_snapshot(context.id, "tab_moved")
+    logger.info("Moved tab to existing window '%s' in context '%s'", window_name, context_name)
+    return {"ok": True}
 
 
 async def _cmd_refresh(args: dict, app: iterm2.App, database: CwDatabase) -> dict:

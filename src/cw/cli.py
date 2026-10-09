@@ -654,6 +654,69 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
                         click.echo(f"      │   {connector} {pane_title}{cwd_info}")
 
 
+# ─── cw move ───────────────────────────────────────────────────────
+
+@main.command("move")
+@click.argument("target")
+def cmd_move(target: str):
+    """
+    Move the current tab to a Context/Window.
+
+    Creates the Context and/or Window if they don't exist (asks first).
+
+    \b
+    Examples:
+      cw move MyProject/Dev          move tab to window "Dev" in "MyProject"
+      cw move NewProject/Main        creates both if needed
+    """
+    target = _strip_trailing_slash(target) if target else target
+    if "/" not in target:
+        click.echo("Error: specify Context/Window (e.g. cw move MyProject/Dev)", err=True)
+        sys.exit(1)
+
+    context_name, window_name = target.split("/", 1)
+    if not context_name or not window_name:
+        click.echo("Error: both Context and Window name required (e.g. cw move MyProject/Dev)", err=True)
+        sys.exit(1)
+
+    # First check what exists
+    response = _daemon_required("move_tab", {
+        "context_name": context_name,
+        "window_name": window_name,
+        "confirm_create": False,
+    })
+
+    if not response.get("ok"):
+        error = response.get("error", "")
+        if error == "confirm_context":
+            if not click.confirm(f"Context \"{context_name}\" doesn't exist. Create it?"):
+                click.echo("Cancelled.")
+                return
+            response = _daemon_required("move_tab", {
+                "context_name": context_name,
+                "window_name": window_name,
+                "confirm_create": True,
+                "create_context": True,
+                "create_window": True,
+            })
+        elif error == "confirm_window":
+            if not click.confirm(f"Window \"{window_name}\" doesn't exist in \"{context_name}\". Create it?"):
+                click.echo("Cancelled.")
+                return
+            response = _daemon_required("move_tab", {
+                "context_name": context_name,
+                "window_name": window_name,
+                "confirm_create": True,
+                "create_window": True,
+            })
+
+    if response.get("ok"):
+        click.echo(f"✓ Tab moved to {context_name}/{window_name}.")
+    else:
+        click.echo(f"Error: {response.get('error')}", err=True)
+        sys.exit(1)
+
+
 # ─── cw current ────────────────────────────────────────────────────
 
 @main.command("current")
