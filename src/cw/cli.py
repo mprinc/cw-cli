@@ -630,6 +630,15 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
         click.echo(f"Context '{name}' not found.", err=True)
         sys.exit(1)
 
+    # Get current window ID from daemon (for marking current items)
+    current_window_id = None
+    try:
+        cur_resp = _send_to_daemon("current")
+        if cur_resp.get("ok"):
+            current_window_id = cur_resp["data"].get("window_id")
+    except Exception:
+        pass
+
     click.echo(f"\n{context.name}\n")
     for window in context.windows:
         if not window.is_member:
@@ -637,21 +646,41 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
         icon = "●" if window.is_open else "○"
         tab_count = len(window.tabs)
         pane_count = sum(len(t.panes) for t in window.tabs)
-        click.echo(f"  {icon} {window.name:<20} {tab_count} tab(s), {pane_count} pane(s)")
+        is_cur_window = (window.id == current_window_id)
+
+        # Window line: yellow bold name, yellow tab/pane counts
+        wname_styled = click.style(window.name, bold=True, fg="yellow")
+        counts_styled = click.style(f"{tab_count} tab(s), {pane_count} pane(s)", fg="yellow")
+        if is_cur_window:
+            arrow = click.style("▶", bold=True, fg="yellow")
+            click.echo(f"  {icon} {arrow}{wname_styled:<20} {counts_styled}")
+        else:
+            click.echo(f"  {icon}  {wname_styled:<20} {counts_styled}")
 
         if verbose >= 1:
             for tab in window.tabs:
-                selected_marker = " ←" if tab.is_selected else ""
-                tab_title = tab.title or f"(tab {tab.tab_order})"
-                click.echo(f"      ├── {tab_title}{selected_marker}")
+                is_selected = tab.is_selected
+                tab_num = click.style(f"{tab.tab_order}", bold=True, fg="blue")
+                tab_title = tab.title or ""
+                if tab_title:
+                    tab_label = f"{tab_num}: {click.style(tab_title, fg='blue')}"
+                else:
+                    tab_label = tab_num
+
+                if is_selected:
+                    arrow = click.style("▶", bold=True, fg="blue")
+                    click.echo(f"      {arrow}{tab_label}")
+                else:
+                    click.echo(f"       {tab_label}")
 
                 if verbose >= 2:
                     for pane_index, pane in enumerate(tab.panes):
                         is_last_pane = (pane_index == len(tab.panes) - 1)
                         connector = "└──" if is_last_pane else "├──"
-                        pane_title = pane.title or pane.profile or "pane"
+                        pane_num = click.style(f"({pane_index + 1})", bold=True)
+                        pane_title = pane.title or pane.profile or ""
                         cwd_info = f"  [{pane.cwd}]" if pane.cwd else ""
-                        click.echo(f"      │   {connector} {pane_title}{cwd_info}")
+                        click.echo(f"      │   {connector} {pane_num} {pane_title}{cwd_info}")
 
 
 # ─── cw move ───────────────────────────────────────────────────────
