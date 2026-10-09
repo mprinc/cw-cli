@@ -414,6 +414,7 @@ def _get_handler(command: str):
         "leave": _cmd_leave,
         "close_current": _cmd_close_current,
         "rename": _cmd_rename,
+        "refresh": _cmd_refresh,
         "_complete_iterm_titles": _cmd_complete_iterm_titles,
     }
     return handlers.get(command)
@@ -722,6 +723,35 @@ async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
     logger.info("Window '%s' left context '%s'", cw_window.name, context_name)
     return {"ok": True, "data": {"context_name": context_name, "window_name": cw_window.name}}
+
+
+async def _cmd_refresh(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Re-apply CW user variables to all tracked windows.
+
+    Sets context/window names on all sessions so badges and
+    reconciliation variables are up to date.
+    """
+    refreshed = 0
+    active_mappings = database.get_all_active_mappings("window")
+    for mapping in active_mappings:
+        iterm_window = app.get_window_by_id(mapping.iterm_id)
+        if not iterm_window:
+            continue
+        cw_window = database.get_window_by_id(mapping.cw_id)
+        if not cw_window:
+            continue
+        context = database.get_context_by_id(cw_window.context_id)
+        if not context:
+            continue
+        await _set_window_cw_vars(
+            iterm_window, context.id, cw_window.id,
+            context.name, cw_window.name,
+        )
+        refreshed += 1
+
+    logger.info("Refreshed %d window(s)", refreshed)
+    return {"ok": True, "data": {"refreshed": refreshed}}
 
 
 async def _cmd_rename(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
@@ -1154,6 +1184,8 @@ async def _cmd_all_windows(args: dict, app: iterm2.App, database: CwDatabase) ->
     """
     window_filter = args.get("filter", "all")
     results = []
+    current_window = app.current_terminal_window
+    current_window_id = current_window.window_id if current_window else None
 
     for ref_index, iterm_window in enumerate(app.terminal_windows, start=1):
         # Get iTerm window title
@@ -1192,6 +1224,7 @@ async def _cmd_all_windows(args: dict, app: iterm2.App, database: CwDatabase) ->
             "context_name": context_name,
             "window_name": window_name,
             "tracked": is_tracked,
+            "is_current": iterm_window.window_id == current_window_id,
             "tabs": tab_count,
             "panes": pane_count,
         })

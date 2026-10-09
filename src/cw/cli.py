@@ -576,9 +576,12 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
             wname = win["window_name"] or "—"
             title = (win["iterm_title"] or "")[:24]
             tracked_icon = "●" if win["tracked"] else "○"
-            click.echo(
-                f"{ref_str:<5} {tracked_icon} {ctx:<17} {wname:<18} {title:<25} {win['tabs']:>3}  {win['panes']:>5}"
-            )
+            current_marker = " ←" if win.get("is_current") else ""
+            line = f"{ref_str:<5} {tracked_icon} {ctx:<17} {wname:<18} {title:<25} {win['tabs']:>3}  {win['panes']:>5}"
+            if win.get("is_current"):
+                click.echo(click.style(line + current_marker, bold=True))
+            else:
+                click.echo(line)
         if untracked:
             click.echo(f"\nTo add: cw join MyContext <ref>    To jump: cw go <ref>")
         return
@@ -635,6 +638,44 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
                         pane_title = pane.title or pane.profile or "pane"
                         cwd_info = f"  [{pane.cwd}]" if pane.cwd else ""
                         click.echo(f"      │   {connector} {pane_title}{cwd_info}")
+
+
+# ─── cw current ────────────────────────────────────────────────────
+
+@main.command("current")
+def cmd_current():
+    """
+    Show which Context the current window belongs to.
+    """
+    response = _daemon_required("current")
+    if not response.get("ok"):
+        click.echo(f"Error: {response.get('error')}", err=True)
+        sys.exit(1)
+    data = response["data"]
+    ctx = data.get("context_name")
+    win = data.get("window_name")
+    if ctx:
+        click.echo(f"{ctx} / {win}")
+    else:
+        click.echo("Current window is not tracked by any Context.")
+
+
+# ─── cw refresh ────────────────────────────────────────────────────
+
+@main.command("refresh")
+def cmd_refresh():
+    """
+    Re-apply CW user variables (badge, context/window names) to all
+    tracked windows. Use after changing badge settings or after daemon
+    code updates.
+    """
+    response = _daemon_required("refresh")
+    if response.get("ok"):
+        count = response["data"].get("refreshed", 0)
+        click.echo(f"✓ Refreshed {count} window(s).")
+    else:
+        click.echo(f"Error: {response.get('error')}", err=True)
+        sys.exit(1)
 
 
 # ─── cw go ─────────────────────────────────────────────────────────
