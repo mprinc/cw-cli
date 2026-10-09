@@ -668,7 +668,7 @@ def _display_context_live(data: dict, verbose: int):
         if verbose >= 1:
             for tab in tabs:
                 is_selected = tab.get("is_selected", False)
-                tab_num = click.style(str(tab["tab_order"]), bold=True, fg="blue")
+                tab_num = click.style(str(tab["tab_order"] + 1), bold=True, fg="blue")
                 tab_title = tab.get("title", "")
                 if tab_title:
                     tab_label = f"{tab_num}: {click.style(tab_title, fg='blue')}"
