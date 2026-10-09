@@ -588,10 +588,10 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
 
             post = f" {title:<25} {win['tabs']:>3}  {win['panes']:>5}"
             if is_cur:
-                # ▶ is 2 chars wide in terminal, so remove 2 spaces to compensate
-                pre = f"{ref_part} {tracked_icon} {ctx:<17}"
+                # ▶ is 2 chars wide in terminal — steal 1 from ctx padding, 1 from space before wname
+                pre = f"  {ref_part} {tracked_icon} {ctx:<16}"
                 arrow = click.style("▶", bold=True, fg="yellow")
-                wname_styled = click.style(f"{wname:<18}", underline=True)
+                wname_styled = click.style(f" {wname:<18}", underline=True)
                 click.echo(f"{pre}{arrow}{wname_styled}{post}")
             else:
                 pre = f"  {ref_part} {tracked_icon} {ctx:<17} "
