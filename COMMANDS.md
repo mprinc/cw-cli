@@ -49,19 +49,20 @@ Options:
 
 ---
 
-## `cw join <name> [<target>]`
+## `cw join <name>[/<window_name>] [<target>]`
 
-Add a window to an existing Context. TARGET can be a ref number or an iTerm window title. If omitted, adds the current (focused) window.
+Add a window to an existing Context. NAME can include `/WindowName` to set the window's name. TARGET can be a ref number or an iTerm window title. If TARGET is omitted, adds the current (focused) window.
 
 ```bash
 cw join MyProject                    # Add current window
+cw join MyProject/Dev                # Add current window, name it "Dev"
 cw join MyProject 3                  # Add window by ref number
 cw join MyProject IoT                # Add window by iTerm title
-cw join MyProject IoT -w Dev         # Add and name it "Dev"
+cw join MyProject/Dev IoT            # Add IoT window, name it "Dev"
 ```
 
 Options:
-- `-w`, `--window-name TEXT` — name for this window (default: iTerm window title)
+- `-w`, `--window-name TEXT` — name for this window (overrides `/WindowName`)
 
 Tab completion for the second argument shows iTerm window titles.
 

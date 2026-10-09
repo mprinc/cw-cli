@@ -43,6 +43,7 @@ source ~/.bashrc   # or ~/.zshrc depending on your shell
 cw create MyProject           # Create empty Context
 cw create MyProject -a        # Create + add current window
 cw join MyProject             # Add current window to Context
+cw join MyProject/Dev         # Add current window, name it "Dev"
 cw join MyProject 3           # Add window by ref number
 cw join MyProject IoT         # Add window by iTerm title
 cw leave                      # Remove current window from its Context

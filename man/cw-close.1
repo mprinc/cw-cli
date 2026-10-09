@@ -4,14 +4,32 @@
 cw \- cw close
 .SH SYNOPSIS
 .B cw
-\fI\,close \/\fR[\fI\,OPTIONS\/\fR] \fI\,NAME\/\fR
+\fI\,close \/\fR[\fI\,OPTIONS\/\fR] [\fI\,NAME\/\fR]
 .SH DESCRIPTION
 .IP
 Save state and close windows of a Context.
 .IP
-NAME can be "ContextName" (close all) or "ContextName/WindowName" (one
-window). State is saved before closing ??? if save fails, close is aborted.
+Without NAME, closes the current window (asks for confirmation). NAME can be
+"ContextName" (close all) or "ContextName/WindowName" (one window). State is
+saved before closing ??? if save fails, close is aborted.
+.IP
+Examples:
+.TP
+cw close
+close current window (confirm)
+.TP
+cw close \fB\-y\fR
+close current window (no confirm)
+.TP
+cw close MyProject
+close all windows in Context
+.TP
+cw close MyProject/Development
+close one window
 .SH OPTIONS
+.TP
+\fB\-y\fR, \fB\-\-yes\fR
+Skip confirmation when closing current window.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Show this message and exit.

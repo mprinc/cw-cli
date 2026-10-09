@@ -4,14 +4,27 @@
 cw \- cw leave
 .SH SYNOPSIS
 .B cw
-\fI\,leave \/\fR[\fI\,OPTIONS\/\fR]
+\fI\,leave \/\fR[\fI\,OPTIONS\/\fR] [\fI\,TARGET\/\fR]
 .SH DESCRIPTION
 .IP
-Remove the current window from its Context.
+Remove a window from its Context.
 .IP
-The window stays open in iTerm but is no longer tracked by CW. This is an
-explicit membership change ??? closing a window does NOT remove it from the
-Context.
+Without TARGET, removes the current (focused) window. TARGET can be
+Context/Window, a ref number, or an iTerm title.
+.IP
+Examples:
+.TP
+cw leave
+current window
+.TP
+cw leave LitTerra/????????????
+specific window by name
+.TP
+cw leave 14
+by ref number
+.TP
+cw leave IoT
+by iTerm title
 .SH OPTIONS
 .TP
 \fB\-y\fR, \fB\-\-yes\fR

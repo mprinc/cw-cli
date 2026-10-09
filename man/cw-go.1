@@ -7,9 +7,10 @@ cw \- cw go
 \fI\,go \/\fR[\fI\,OPTIONS\/\fR] \fI\,TARGET\/\fR
 .SH DESCRIPTION
 .IP
-Jump to a Context window (bring it to front).
+Jump to a window (bring it to front).
 .IP
-A number jumps by ref from `cw windows \fB\-\-all\fR`. A name jumps by Context.
+TARGET can be a Context name, Context/Window, ref number, iTerm window
+title, or "\-" to jump back.
 .IP
 Examples:
 .TP
@@ -17,13 +18,16 @@ cw go MyProject
 last used window in Context
 .TP
 cw go MyProject/Development
-specific window
+specific window by CW name
 .TP
 cw go \-
 jump back to previous Context
 .TP
 cw go 3
-window #3 from `cw windows \fB\-\-all\fR`
+window by ref number
+.TP
+cw go IoT
+window by iTerm title
 .SH OPTIONS
 .TP
 \fB\-h\fR, \fB\-\-help\fR

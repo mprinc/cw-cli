@@ -4,24 +4,31 @@
 cw \- cw join
 .SH SYNOPSIS
 .B cw
-\fI\,join \/\fR[\fI\,OPTIONS\/\fR] \fI\,NAME \/\fR[\fI\,WINDOW_REF\/\fR]
+\fI\,join \/\fR[\fI\,OPTIONS\/\fR] \fI\,NAME \/\fR[\fI\,TARGET\/\fR]
 .SH DESCRIPTION
 .IP
 Add a window to an existing Context.
 .IP
-By default adds the current (focused) window. Pass a number to add a
-specific window by its ref from `cw windows \fB\-\-all\fR`.
+NAME can include \fI\,/WindowName\/\fP to set the window's name in the Context. TARGET
+can be a ref number or an iTerm window title. If TARGET is omitted, adds the
+current (focused) window.
 .IP
 Examples:
 .TP
 cw join MyProject
 add current window
 .TP
-cw join MyProject 3
-add window #3
+cw join MyProject/Dev
+add current window, name it "Dev"
 .TP
-cw join MyProject 3 \fB\-w\fR Dev
-add window #3, name it "Dev"
+cw join MyProject 3
+add window by ref number
+.TP
+cw join MyProject IoT
+add window by iTerm title
+.TP
+cw join MyProject/Dev IoT
+add IoT window, name it "Dev"
 .SH OPTIONS
 .TP
 \fB\-w\fR, \fB\-\-window\-name\fR TEXT
