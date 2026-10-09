@@ -258,10 +258,9 @@ async def _periodic_checkpoint(
     while True:
         try:
             await asyncio.sleep(CHECKPOINT_INTERVAL_SECONDS)
-            global _changes_pending
-            if _changes_pending:
-                _changes_pending = False
-                await _do_checkpoint(app, database)
+            # ALWAYS checkpoint — LayoutChangeMonitor may not fire reliably,
+            # so periodic sync is the primary safety net
+            await _do_checkpoint(app, database)
         except Exception:
             logger.exception("Checkpoint error")
 
@@ -290,7 +289,8 @@ async def _do_checkpoint(
                 fullscreen=window_state["fullscreen"],
             )
             database.sync_window_layout(mapping.cw_id, window_state["tabs"])
-    logger.debug("Checkpoint complete")
+    if active_mappings:
+        logger.info("Checkpoint: synced %d window(s)", len(active_mappings))
 
 
 # ─── Unix socket server for CLI communication ─────────────────────
