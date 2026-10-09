@@ -691,9 +691,9 @@ def _display_context_live(data: dict, verbose: int):
                         cwd_info = f"  [{pane['cwd']}]" if pane.get("cwd") else ""
                         if pane.get("is_active"):
                             marker = click.style("▶", bold=True, fg="green")
-                            click.echo(f"      │   {connector}{marker} {pane_num} {pane_title}{cwd_info}")
+                            click.echo(f"      │  {connector} {marker} {pane_num} {pane_title}{cwd_info}")
                         else:
-                            click.echo(f"      │   {connector}   {pane_num} {pane_title}{cwd_info}")
+                            click.echo(f"      │  {connector}    {pane_num} {pane_title}{cwd_info}")
 
 
 # ─── cw move ───────────────────────────────────────────────────────
