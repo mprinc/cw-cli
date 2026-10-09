@@ -81,6 +81,15 @@ bash scripts/uninstall.sh
 
 Скрипта **увијек прво направи бекап**, па тек онда уклања daemon, man странице, completion и опционо податке. Бекапови се чувају.
 
+## Тестови
+
+```bash
+source .venv/bin/activate
+python -m pytest tests/ -v
+```
+
+47 тестова: DB CRUD, модели, CLI помоћне функције, shell completion, конфигурација, DB миграција.
+
 ## Приказ имена Context-а у iTerm панелима
 
 CW поставља корисничке варијабле на сваку сесију. За приказ:

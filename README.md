@@ -82,6 +82,15 @@ bash scripts/uninstall.sh
 
 The uninstall script **always creates a backup first**, then removes the daemon, man pages, shell completion, and optionally the data directory. Backups are preserved.
 
+## Tests
+
+```bash
+source .venv/bin/activate
+python -m pytest tests/ -v
+```
+
+47 tests covering: DB CRUD, models, CLI helpers, shell completion, config, DB migration.
+
 ## Show Context name in iTerm panes
 
 CW sets user variables on every session. To display them:
