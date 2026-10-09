@@ -911,10 +911,11 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
         return {"ok": False, "error": f"Window '{window_name}' exists but is not open. Open it first with: cw open {context_name}/{window_name}"}
 
     try:
-        # Use iterm2 scripting function to move tab to specific window
-        await current_tab.async_invoke_function(
-            f'iterm2.move_tab_to_window(window_id: "{target_iterm_window.window_id}")'
-        )
+        # Move tab to existing window using async_set_tabs
+        # This appends the current tab to the target window's tab list
+        existing_tabs = list(target_iterm_window.tabs)
+        existing_tabs.append(current_tab)
+        await target_iterm_window.async_set_tabs(existing_tabs)
     except Exception as exc:
         logger.exception("Failed to move tab to existing window")
         return {"ok": False, "error": f"Failed to move tab: {exc}"}
