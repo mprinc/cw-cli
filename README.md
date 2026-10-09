@@ -91,6 +91,7 @@ Each pane will then show e.g. `MyProject / Development` as a background badge.
 
 ## Documentation
 
+- [FEATURES.md](FEATURES.md) — feature overview
 - [COMMANDS.md](COMMANDS.md) — full command reference
 - [COMMANDS-sr.md](COMMANDS-sr.md) — command reference in Serbian
 - [ARCHITECTURE-sr.md](ARCHITECTURE-sr.md) — architecture overview (Serbian)

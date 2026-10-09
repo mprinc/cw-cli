@@ -90,6 +90,7 @@ iTerm → Settings → Profiles → General → Badge:
 
 ## Документација
 
+- [FEATURES.md](FEATURES.md) — преглед функционалности
 - [COMMANDS-sr.md](COMMANDS-sr.md) — детаљна референца команди (српски)
 - [COMMANDS.md](COMMANDS.md) — command reference (English)
 - [ARCHITECTURE-sr.md](ARCHITECTURE-sr.md) — преглед архитектуре
