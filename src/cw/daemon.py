@@ -61,14 +61,22 @@ logger = logging.getLogger("cw.daemon")
 
 # ─── Global state ──────────────────────────────────────────────────
 
-# Flag to trigger checkpoint on next interval (set by event handlers)
-_changes_pending = False
+import time as _time
+
+# Timestamp of last sync (used to avoid redundant checkpoint if a
+# monitor already synced recently)
+_last_sync_time: float = 0
 
 
-def _mark_dirty():
-    """Signal that a change happened and checkpoint should save state."""
-    global _changes_pending
-    _changes_pending = True
+def _mark_synced():
+    """Record that a sync just happened."""
+    global _last_sync_time
+    _last_sync_time = _time.monotonic()
+
+
+def _seconds_since_last_sync() -> float:
+    """How many seconds since the last sync."""
+    return _time.monotonic() - _last_sync_time
 
 
 # ─── Main entry point ─────────────────────────────────────────────
@@ -127,6 +135,7 @@ async def _monitor_layout_changes(
         try:
             logger.info("Layout change detected (callback)")
             await _handle_layout_change(app, database)
+            _mark_synced()
         except Exception:
             logger.exception("Error handling layout change")
 
@@ -290,6 +299,7 @@ async def _monitor_focus_changes(
                                 ctx = database.get_context_by_id(cw_win.context_id)
                                 if ctx:
                                     _last_focused_window_per_context[ctx.name] = cw_id
+                            _mark_synced()
                 except Exception:
                     logger.exception("Error handling focus change")
     except Exception:
@@ -312,9 +322,11 @@ async def _periodic_checkpoint(
     while True:
         try:
             await asyncio.sleep(CHECKPOINT_INTERVAL_SECONDS)
-            # ALWAYS checkpoint — LayoutChangeMonitor may not fire reliably,
-            # so periodic sync is the primary safety net
+            # Skip if a monitor already synced recently (within 4s)
+            if _seconds_since_last_sync() < CHECKPOINT_INTERVAL_SECONDS - 1:
+                continue
             await _do_checkpoint(app, database)
+            _mark_synced()
         except Exception:
             logger.exception("Checkpoint error")
 
