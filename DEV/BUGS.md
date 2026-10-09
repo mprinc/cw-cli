@@ -1,62 +1,107 @@
-Synced with commit: 62cd0be
+Synced with commit: 6001825
 
 # Known Bugs & Fixes
 
-## Fixed
-
-### BUG-001: LayoutChangeMonitor never fires (CRITICAL)
-
-**Discovered:** 2026-10-09  
-**Fixed in:** `db8aa18`, `ea0fed4`, `c9e2559`, `16debe2`  
-**Severity:** Critical — state loss on crash
-
-**Symptom:** Database never captured layout changes (split pane, new tab, close pane). `cw windows -vv` showed stale data. If iTerm crashed, all changes since last explicit `cw save` were lost.
-
-**Root cause:** `iterm2.LayoutChangeMonitor` class (async context manager style) never fires `async_get()` in AutoLaunch scripts. The monitor starts but `await monitor.async_get()` blocks forever without returning.
-
-**Investigation:** Daemon log showed `LayoutChangeMonitor started` but zero `layout change` entries, ever. SessionTerminationMonitor and NewSessionMonitor worked fine. The periodic checkpoint relied on `_changes_pending` flag which was only set by monitors — so checkpoint also never ran.
-
-**Fix (multi-layered):**
-1. **Callback subscription** (`db8aa18`): Replaced `LayoutChangeMonitor` class with `async_subscribe_to_layout_change_notification()` callback style — same iTerm2 API but different invocation mechanism. This **works**.
-2. **FocusMonitor** (`ea0fed4`): Added `iterm2.FocusMonitor` which fires on every tab/pane/window focus change. Syncs the focused window's state immediately.
-3. **Unconditional checkpoint** (`c9e2559`): Checkpoint now always syncs every interval, not only when `_changes_pending` is set. Safety net if all monitors fail.
-4. **5-second interval** (`16debe2`): Reduced checkpoint from 30s to 5s. Async + WAL mode makes this cheap.
-5. **Smart dedup** (`cb047ac`): Checkpoint skips if a monitor already synced within the last 4 seconds, avoiding duplicate work.
-
-**Verification:** After iTerm restart, daemon log shows:
-- `Layout change detected (callback)` — on every split/close/tab create
-- `FocusMonitor started` — active
-- `Checkpoint: synced N window(s)` — every 5s when no monitor synced recently
-
-**Lesson:** Never rely on a single event mechanism. Multiple independent sync paths (callback + focus + checkpoint) provide defense in depth.
+States: `NEW` → `UNDERSTOOD` → `IN-PROGRESS` → `SOLVED`
 
 ---
 
-### BUG-002: `cw windows -vv` shows stale DB data
+## BUG-001: LayoutChangeMonitor never fires
 
+**Status:** SOLVED  
 **Discovered:** 2026-10-09  
-**Fixed in:** `f585898`  
-**Severity:** Medium — misleading display
+**Severity:** Critical — state loss on crash  
+**Fixed in:** `db8aa18`, `ea0fed4`, `c9e2559`, `16debe2`, `cb047ac`
 
-**Symptom:** `cw windows -vv` showed fewer panes than actually exist, missing newly split panes.
+**Reproduction:** Split a pane, wait 30+ seconds, run `cw windows -vv` — new pane not shown. Check `daemon.log` — no `layout change` entries ever.
 
-**Root cause:** CLI read from SQLite database, which could be seconds behind live iTerm state (especially before BUG-001 was fixed).
+**Problem:** `iterm2.LayoutChangeMonitor` class (async context manager with `async_get()`) never fires in AutoLaunch scripts. The monitor starts but blocks forever.
 
-**Fix:** `cw windows` now reads live iTerm state via daemon (`windows_live` command) instead of DB. As a side effect, the live state is also persisted to DB, keeping it fresh.
+**Root cause:** iTerm2 Python API `LayoutChangeMonitor` uses async context manager pattern that doesn't receive notifications in `run_forever` AutoLaunch context. The callback subscription API (`async_subscribe_to_layout_change_notification`) uses the same underlying notification type but a different invocation mechanism that works.
+
+**Fix (multi-layered defense):**
+1. **Callback subscription** (`db8aa18`): `async_subscribe_to_layout_change_notification()` — works
+2. **FocusMonitor** (`ea0fed4`): syncs on every tab/pane/window focus change
+3. **Unconditional checkpoint** (`c9e2559`): always syncs, not only on `_changes_pending`
+4. **5-second interval** (`16debe2`): max 5s data loss on crash
+5. **Smart dedup** (`cb047ac`): skips checkpoint if monitor synced recently
+
+**Verification:** `tail -f ~/.contextual-walker/daemon.log | grep layout` shows `Layout change detected (callback)` on every split/close/tab create.
 
 ---
 
-### BUG-003: Tab titles not read correctly
+## BUG-002: `cw windows -vv` shows stale DB data
 
+**Status:** SOLVED  
 **Discovered:** 2026-10-09  
-**Fixed in:** `3d1789f`  
-**Severity:** Low — cosmetic
+**Severity:** Medium — misleading display  
+**Fixed in:** `f585898`
 
-**Symptom:** Tab titles showed as `(tab 0)`, `(tab 1)` even when tabs had visible names in iTerm.
+**Reproduction:** Split a pane, immediately run `cw windows -vv` — shows old pane count.
 
-**Root cause:** Code read `titleOverride` variable which is only set when user manually renames a tab. Most tabs use auto-generated titles from session names.
+**Problem:** CLI read from SQLite which lags behind live state (especially before BUG-001 fix).
 
-**Fix:** Read tab title with fallback chain: `titleOverride` → `title` → first session's `autoName`.
+**Fix:** `cw windows` now reads live iTerm state via daemon (`windows_live` command). Side effect: persists to DB, keeping it fresh.
+
+---
+
+## BUG-003: Tab titles not read correctly
+
+**Status:** SOLVED  
+**Discovered:** 2026-10-09  
+**Severity:** Low — cosmetic  
+**Fixed in:** `3d1789f`
+
+**Reproduction:** Tab has a visible name in iTerm (from session name), but `cw windows -vv` shows `(tab 0)`.
+
+**Problem:** Code read `titleOverride` which is only set on manual rename. Auto-generated tab titles use different variables.
+
+**Fix:** Fallback chain: `titleOverride` → `title` → first session `autoName`.
+
+---
+
+## BUG-004: `cw move` to existing window crashes
+
+**Status:** SOLVED  
+**Discovered:** 2026-10-09  
+**Severity:** High — command fails  
+**Fixed in:** `b9afeec`
+
+**Reproduction:** `cw move Context/ExistingWindow` — error about `iterm2.move_tab_to_window` function signature.
+
+**Problem:** Used `Tab.async_invoke_function('iterm2.move_tab_to_window(window_id: ...)')` which doesn't exist as a scripting function.
+
+**Fix:** Use `Window.async_set_tabs()` to append current tab to target window's tab list. This API supports cross-window tab moves.
+
+---
+
+## BUG-005: `cw move` to new window doesn't move tab
+
+**Status:** SOLVED  
+**Discovered:** 2026-10-09  
+**Severity:** High — command fails  
+**Fixed in:** `b86d445`, `4c63256`
+
+**Reproduction:** `cw move Context/NewWindow` — creates empty new window, tab stays in original.
+
+**Problem:** `Tab.async_move_to_window()` takes NO arguments (creates new window from tab). Code was passing target window as argument.
+
+**Fix:** Call `async_move_to_window()` without arguments for new window case. Handle single-tab windows by re-registering instead of moving.
+
+---
+
+## BUG-006: Window title not set after `cw move`
+
+**Status:** SOLVED  
+**Discovered:** 2026-10-09  
+**Severity:** Low — cosmetic  
+**Fixed in:** `26cca63`
+
+**Reproduction:** After `cw move`, new window shows tab name instead of `Context / Window`.
+
+**Problem:** `async_set_title()` called too early — iTerm overwrites it with its own title during window creation.
+
+**Fix:** Add 0.5s delay, refresh app reference, then set title.
 
 ---
 
