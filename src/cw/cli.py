@@ -122,7 +122,7 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.version_option(package_name="contextual-walker")
 def main():
-    """Contextual-Walker — persistent context manager for iTerm2."""
+    """Contextual-Walker - persistent context manager for iTerm2."""
     pass
 
 
