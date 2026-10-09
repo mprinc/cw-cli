@@ -415,6 +415,7 @@ def _get_handler(command: str):
         "close_current": _cmd_close_current,
         "rename": _cmd_rename,
         "refresh": _cmd_refresh,
+        "windows_live": _cmd_windows_live,
         "move_tab": _cmd_move_tab,
         "_complete_iterm_titles": _cmd_complete_iterm_titles,
     }
@@ -858,6 +859,88 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
     database.save_snapshot(context.id, "tab_moved")
     logger.info("Moved tab to existing window '%s' in context '%s'", window_name, context_name)
     return {"ok": True}
+
+
+async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Read LIVE window/tab/pane state from iTerm for a specific context.
+
+    Unlike reading from DB, this always reflects the current iTerm state.
+    Also persists the state to DB as a side effect (keeps DB fresh).
+
+    @param args: {"context_name": str}
+    """
+    context_name = args.get("context_name", "").strip()
+    if not context_name:
+        return {"ok": False, "error": "context_name is required"}
+
+    context = database.get_context_by_name(context_name)
+    if not context:
+        return {"ok": False, "error": f"Context '{context_name}' not found"}
+
+    current_window = app.current_terminal_window
+    current_window_id = current_window.window_id if current_window else None
+
+    windows_data = []
+    for cw_window in context.windows:
+        if not cw_window.is_member:
+            continue
+
+        window_info = {
+            "id": cw_window.id,
+            "name": cw_window.name,
+            "is_open": cw_window.is_open,
+            "is_current": False,
+            "tabs": [],
+        }
+
+        if cw_window.is_open:
+            iterm_id = database.get_iterm_id_for_cw(cw_window.id)
+            if iterm_id:
+                iterm_window = app.get_window_by_id(iterm_id)
+                if iterm_window:
+                    window_info["is_current"] = (iterm_window.window_id == current_window_id)
+                    # Read live state
+                    window_state = await read_iterm_window_state(iterm_window)
+                    # Persist to DB as side effect
+                    database.sync_window_layout(cw_window.id, window_state["tabs"])
+
+                    for tab_data in window_state["tabs"]:
+                        tab_info = {
+                            "title": tab_data.get("title", ""),
+                            "tab_order": tab_data.get("tab_order", 0),
+                            "is_selected": tab_data.get("is_selected", False),
+                            "panes": [],
+                        }
+                        for pane_data in tab_data.get("panes", []):
+                            tab_info["panes"].append({
+                                "title": pane_data.get("title", ""),
+                                "cwd": pane_data.get("cwd", ""),
+                                "profile": pane_data.get("profile", ""),
+                                "is_active": pane_data.get("is_active", False),
+                            })
+                        window_info["tabs"].append(tab_info)
+        else:
+            # Closed window — use DB state
+            for tab in cw_window.tabs:
+                tab_info = {
+                    "title": tab.title,
+                    "tab_order": tab.tab_order,
+                    "is_selected": tab.is_selected,
+                    "panes": [],
+                }
+                for pane in tab.panes:
+                    tab_info["panes"].append({
+                        "title": pane.title,
+                        "cwd": pane.cwd,
+                        "profile": pane.profile,
+                        "is_active": pane.is_active,
+                    })
+                window_info["tabs"].append(tab_info)
+
+        windows_data.append(window_info)
+
+    return {"ok": True, "data": {"context_name": context_name, "windows": windows_data}}
 
 
 async def _cmd_refresh(args: dict, app: iterm2.App, database: CwDatabase) -> dict:

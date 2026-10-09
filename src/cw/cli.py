@@ -616,52 +616,60 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
             click.echo("or specify a context: cw windows <name>", err=True)
             sys.exit(1)
 
-    from cw.db import CwDatabase
-
-    if not DB_PATH.exists():
-        click.echo("No CW database found.", err=True)
-        sys.exit(1)
-
-    database = CwDatabase()
-    context = database.get_context_by_name(name)
-    database.close()
-
-    if not context:
-        click.echo(f"Context '{name}' not found.", err=True)
-        sys.exit(1)
-
-    # Get current window ID from daemon (for marking current items)
-    current_window_id = None
+    # Try live state from daemon (always fresh); fall back to DB
+    live_data = None
     try:
-        cur_resp = _send_to_daemon("current")
-        if cur_resp.get("ok"):
-            current_window_id = cur_resp["data"].get("window_id")
+        resp = _send_to_daemon("windows_live", {"context_name": name})
+        if resp.get("ok"):
+            live_data = resp["data"]
     except Exception:
         pass
 
-    click.echo(f"\n{context.name}\n")
-    for window in context.windows:
-        if not window.is_member:
-            continue
-        icon = "●" if window.is_open else "○"
-        tab_count = len(window.tabs)
-        pane_count = sum(len(t.panes) for t in window.tabs)
-        is_cur_window = (window.id == current_window_id)
+    if live_data:
+        _display_context_live(live_data, verbose)
+    else:
+        # Fallback to DB
+        from cw.db import CwDatabase
+        if not DB_PATH.exists():
+            click.echo("No CW database found.", err=True)
+            sys.exit(1)
+        database = CwDatabase()
+        context = database.get_context_by_name(name)
+        database.close()
+        if not context:
+            click.echo(f"Context '{name}' not found.", err=True)
+            sys.exit(1)
+        click.echo(f"\n{context.name} (DB state — daemon not available)\n")
+        for window in context.windows:
+            if not window.is_member:
+                continue
+            icon = "●" if window.is_open else "○"
+            click.echo(f"  {icon}  {window.name:<20} {len(window.tabs)} tab(s)")
 
-        # Window line: yellow bold name, yellow tab/pane counts
-        wname_styled = click.style(window.name, bold=True, fg="yellow")
+
+def _display_context_live(data: dict, verbose: int):
+    """Display context windows from live daemon data."""
+    click.echo(f"\n{data['context_name']}\n")
+    for window in data["windows"]:
+        icon = "●" if window["is_open"] else "○"
+        tabs = window["tabs"]
+        tab_count = len(tabs)
+        pane_count = sum(len(t["panes"]) for t in tabs)
+        is_cur = window.get("is_current", False)
+
+        wname_styled = click.style(window["name"], bold=True, fg="yellow")
         counts_styled = click.style(f"{tab_count} tab(s), {pane_count} pane(s)", fg="yellow")
-        if is_cur_window:
+        if is_cur:
             arrow = click.style("▶", bold=True, fg="yellow")
-            click.echo(f"  {icon} {arrow}{wname_styled:<20} {counts_styled}")
+            click.echo(f"  {icon} {arrow}{wname_styled}  {counts_styled}")
         else:
-            click.echo(f"  {icon}  {wname_styled:<20} {counts_styled}")
+            click.echo(f"  {icon}  {wname_styled}  {counts_styled}")
 
         if verbose >= 1:
-            for tab in window.tabs:
-                is_selected = tab.is_selected
-                tab_num = click.style(f"{tab.tab_order}", bold=True, fg="blue")
-                tab_title = tab.title or ""
+            for tab in tabs:
+                is_selected = tab.get("is_selected", False)
+                tab_num = click.style(str(tab["tab_order"]), bold=True, fg="blue")
+                tab_title = tab.get("title", "")
                 if tab_title:
                     tab_label = f"{tab_num}: {click.style(tab_title, fg='blue')}"
                 else:
@@ -674,13 +682,14 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
                     click.echo(f"       {tab_label}")
 
                 if verbose >= 2:
-                    for pane_index, pane in enumerate(tab.panes):
-                        is_last_pane = (pane_index == len(tab.panes) - 1)
-                        connector = "└──" if is_last_pane else "├──"
+                    panes = tab.get("panes", [])
+                    for pane_index, pane in enumerate(panes):
+                        is_last = (pane_index == len(panes) - 1)
+                        connector = "└──" if is_last else "├──"
                         pane_num = click.style(f"({pane_index + 1})", bold=True)
-                        pane_title = pane.title or pane.profile or ""
-                        cwd_info = f"  [{pane.cwd}]" if pane.cwd else ""
-                        if pane.is_active:
+                        pane_title = pane.get("title", "") or pane.get("profile", "") or ""
+                        cwd_info = f"  [{pane['cwd']}]" if pane.get("cwd") else ""
+                        if pane.get("is_active"):
                             marker = click.style("▶", bold=True, fg="green")
                             click.echo(f"      │   {connector} {marker}{pane_num} {pane_title}{cwd_info}")
                         else:
