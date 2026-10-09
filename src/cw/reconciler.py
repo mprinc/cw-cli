@@ -132,15 +132,39 @@ async def read_iterm_window_state(iterm_window: iterm2.Window) -> dict:
 
 async def _safe_tab_title(iterm_tab: iterm2.Tab) -> str:
     """
-    Read a tab's title, returning empty string on failure.
+    Read a tab's title using multiple fallbacks.
+
+    Priority: titleOverride (user-set) → title → first session autoName.
 
     @param iterm_tab: An iTerm2 Tab object.
     @returns: Tab title string.
     """
+    # 1. User-set title override
     try:
-        return await iterm_tab.async_get_variable("titleOverride") or ""
+        title = await iterm_tab.async_get_variable("titleOverride")
+        if title:
+            return title
     except Exception:
-        return ""
+        pass
+
+    # 2. Tab's computed title
+    try:
+        title = await iterm_tab.async_get_variable("title")
+        if title:
+            return title
+    except Exception:
+        pass
+
+    # 3. First session's auto name
+    try:
+        if iterm_tab.sessions:
+            title = await iterm_tab.sessions[0].async_get_variable("autoName")
+            if title:
+                return title
+    except Exception:
+        pass
+
+    return ""
 
 
 async def reconcile(
