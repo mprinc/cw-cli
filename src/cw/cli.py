@@ -661,9 +661,9 @@ def _display_context_live(data: dict, verbose: int):
         counts_styled = click.style(f"{tab_count} tab(s), {pane_count} pane(s)", fg="yellow")
         if is_cur:
             arrow = click.style("▶", bold=True, fg="yellow")
-            click.echo(f" {icon}{arrow} {wname_styled}  {counts_styled}")
+            click.echo(f"{icon} {arrow} {wname_styled}  {counts_styled}")
         else:
-            click.echo(f" {icon}   {wname_styled}  {counts_styled}")
+            click.echo(f"{icon}    {wname_styled}  {counts_styled}")
 
         if verbose >= 1:
             for tab in tabs:
