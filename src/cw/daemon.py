@@ -104,6 +104,7 @@ async def main(connection: iterm2.Connection) -> None:
         _monitor_layout_changes(connection, app, database),
         _monitor_session_termination(connection, app, database),
         _monitor_new_sessions(connection, app, database),
+        _monitor_focus_changes(connection, app, database),
         _periodic_checkpoint(app, database),
         _socket_server(app, database),
     )
@@ -240,6 +241,52 @@ async def _monitor_new_sessions(
                     logger.exception("Error handling new session %s", session_id)
     except Exception:
         logger.exception("NewSessionMonitor crashed — will not restart")
+
+
+# ─── Focus change monitor ─────────────────────────────────────────
+
+async def _monitor_focus_changes(
+    connection: iterm2.Connection,
+    app: iterm2.App,
+    database: CwDatabase,
+) -> None:
+    """
+    Watch for focus changes (window/tab/session switches).
+
+    On each focus change, sync the focused window's layout to DB.
+    This compensates for LayoutChangeMonitor not firing reliably.
+    """
+    try:
+        async with iterm2.FocusMonitor(connection) as monitor:
+            logger.info("FocusMonitor started")
+            while True:
+                update = await monitor.async_get_next_update()
+                try:
+                    # On any focus change, sync the now-focused window
+                    current_window = app.current_terminal_window
+                    if current_window:
+                        cw_id = database.get_cw_id_for_iterm(current_window.window_id)
+                        if cw_id:
+                            window_state = await read_iterm_window_state(current_window)
+                            database.update_window_state(
+                                cw_id,
+                                frame_x=window_state["frame_x"],
+                                frame_y=window_state["frame_y"],
+                                frame_width=window_state["frame_width"],
+                                frame_height=window_state["frame_height"],
+                                fullscreen=window_state["fullscreen"],
+                            )
+                            database.sync_window_layout(cw_id, window_state["tabs"])
+                            # Track last focused window per context
+                            cw_win = database.get_window_by_id(cw_id)
+                            if cw_win:
+                                ctx = database.get_context_by_id(cw_win.context_id)
+                                if ctx:
+                                    _last_focused_window_per_context[ctx.name] = cw_id
+                except Exception:
+                    logger.exception("Error handling focus change")
+    except Exception:
+        logger.exception("FocusMonitor crashed — will not restart")
 
 
 # ─── Periodic checkpoint ──────────────────────────────────────────
