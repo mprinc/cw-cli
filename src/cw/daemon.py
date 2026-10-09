@@ -961,32 +961,32 @@ async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -
             "tabs": [],
         }
 
-        if cw_window.is_open:
-            iterm_id = database.get_iterm_id_for_cw(cw_window.id)
-            if iterm_id:
-                iterm_window = app.get_window_by_id(iterm_id)
-                if iterm_window:
-                    window_info["is_current"] = (iterm_window.window_id == current_window_id)
-                    # Read live state
-                    window_state = await read_iterm_window_state(iterm_window)
-                    # Persist to DB as side effect
-                    database.sync_window_layout(cw_window.id, window_state["tabs"])
+        # Try to find live iTerm window regardless of DB is_open flag
+        iterm_id = database.get_iterm_id_for_cw(cw_window.id)
+        iterm_window = app.get_window_by_id(iterm_id) if iterm_id else None
+        if iterm_window:
+            window_info["is_open"] = True
+            window_info["is_current"] = (iterm_window.window_id == current_window_id)
+            # Read live state
+            window_state = await read_iterm_window_state(iterm_window)
+            # Persist to DB as side effect
+            database.sync_window_layout(cw_window.id, window_state["tabs"])
 
-                    for tab_data in window_state["tabs"]:
-                        tab_info = {
-                            "title": tab_data.get("title", ""),
-                            "tab_order": tab_data.get("tab_order", 0),
-                            "is_selected": tab_data.get("is_selected", False),
-                            "panes": [],
-                        }
-                        for pane_data in tab_data.get("panes", []):
-                            tab_info["panes"].append({
-                                "title": pane_data.get("title", ""),
-                                "cwd": pane_data.get("cwd", ""),
-                                "profile": pane_data.get("profile", ""),
-                                "is_active": pane_data.get("is_active", False),
-                            })
-                        window_info["tabs"].append(tab_info)
+            for tab_data in window_state["tabs"]:
+                tab_info = {
+                    "title": tab_data.get("title", ""),
+                    "tab_order": tab_data.get("tab_order", 0),
+                    "is_selected": tab_data.get("is_selected", False),
+                    "panes": [],
+                }
+                for pane_data in tab_data.get("panes", []):
+                    tab_info["panes"].append({
+                        "title": pane_data.get("title", ""),
+                        "cwd": pane_data.get("cwd", ""),
+                        "profile": pane_data.get("profile", ""),
+                        "is_active": pane_data.get("is_active", False),
+                    })
+                window_info["tabs"].append(tab_info)
         else:
             # Closed window — use DB state
             for tab in cw_window.tabs:
