@@ -36,7 +36,7 @@ ITERM_VAR_TAB_ID = "user.cw_tab_id"
 ITERM_VAR_SESSION_ID = "user.cw_session_id"
 
 # ─── Periodic checkpoint interval (seconds) ───────────────────────
-CHECKPOINT_INTERVAL_SECONDS = 30
+CHECKPOINT_INTERVAL_SECONDS = 5
 
 # ─── Socket protocol ──────────────────────────────────────────────
 SOCKET_BUFFER_SIZE = 65536
