@@ -120,19 +120,26 @@ async def _monitor_layout_changes(
     """
     Watch for layout changes (tabs moved, panes split/closed, windows resized).
 
-    On each change, re-read the affected window's state and persist it.
+    Uses callback-style subscription instead of LayoutChangeMonitor class,
+    which doesn't fire reliably in AutoLaunch scripts.
     """
+    async def _on_layout_change(connection, notification):
+        try:
+            logger.info("Layout change detected (callback)")
+            await _handle_layout_change(app, database)
+        except Exception:
+            logger.exception("Error handling layout change")
+
     try:
-        async with iterm2.LayoutChangeMonitor(connection) as monitor:
-            logger.info("LayoutChangeMonitor started")
-            while True:
-                await monitor.async_get()
-                try:
-                    await _handle_layout_change(app, database)
-                except Exception:
-                    logger.exception("Error handling layout change")
+        token = await iterm2.notifications.async_subscribe_to_layout_change_notification(
+            connection, _on_layout_change,
+        )
+        logger.info("Layout change subscription active (callback style)")
+        # Keep alive — if this coroutine ends, gather() would finish
+        while True:
+            await asyncio.sleep(3600)
     except Exception:
-        logger.exception("LayoutChangeMonitor crashed — will not restart")
+        logger.exception("Layout change subscription failed")
 
 
 async def _handle_layout_change(
