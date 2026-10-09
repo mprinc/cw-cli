@@ -781,57 +781,28 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
     if not target_cw_window:
         if not confirm_create and not args.get("create_window"):
             return {"ok": False, "error": "confirm_window"}
-        # Create a new iTerm window, then move the tab into it
+        # Move tab to its own new window using iTerm2 native API
+        # async_move_to_window() takes NO arguments — it creates a new window
         try:
-            # Create empty window — use same profile as current tab's first session
-            profile_name = "Default"
-            if current_tab.sessions:
-                try:
-                    profile_name = await current_tab.sessions[0].async_get_variable("profileName") or "Default"
-                except Exception:
-                    pass
-
-            target_iterm_window = await iterm2.Window.async_create(
-                app.connection, profile=profile_name,
-            )
-            if not target_iterm_window:
-                return {"ok": False, "error": "Failed to create new window"}
-
-            # Wait for iTerm to fully set up the new window
-            await asyncio.sleep(0.5)
-
-            # Refresh app state so we have current references
-            app = await iterm2.async_get_app(app.connection)
-
-            # Re-find our tab and target window with fresh references
-            fresh_tab = app.get_tab_by_id(current_tab.tab_id)
-            fresh_target = app.get_window_by_id(target_iterm_window.window_id)
-
-            if not fresh_tab or not fresh_target:
-                return {"ok": False, "error": "Lost reference to tab or window after creation"}
-
-            # Remember the placeholder tab to close later
-            placeholder_tab_id = fresh_target.tabs[0].tab_id if fresh_target.tabs else None
-
-            # Move tab to the new window
-            await fresh_tab.async_move_to_window(fresh_target)
-
-            # Wait and refresh again
-            await asyncio.sleep(0.3)
-            app = await iterm2.async_get_app(app.connection)
-            fresh_target = app.get_window_by_id(target_iterm_window.window_id)
-
-            # Close the placeholder tab
-            if fresh_target and placeholder_tab_id:
-                for t in fresh_target.tabs:
-                    if t.tab_id == placeholder_tab_id:
-                        try:
-                            await t.async_close(force=True)
-                        except Exception:
-                            pass
+            # Tab must not be the only tab in the window
+            source_window = None
+            for w in app.terminal_windows:
+                for t in w.tabs:
+                    if t.tab_id == current_tab.tab_id:
+                        source_window = w
                         break
+                if source_window:
+                    break
 
-            target_iterm_window = fresh_target
+            if source_window and len(source_window.tabs) < 2:
+                # Only 1 tab — can't "move" it, it's already alone.
+                # Just register this window in the new context instead
+                target_iterm_window = source_window
+            else:
+                target_iterm_window = await current_tab.async_move_to_window()
+
+            if not target_iterm_window:
+                return {"ok": False, "error": "Failed to move tab to new window"}
 
         except Exception as exc:
             logger.exception("Failed to move tab to new window")
@@ -868,7 +839,10 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
         return {"ok": False, "error": f"Window '{window_name}' exists but is not open. Open it first with: cw open {context_name}/{window_name}"}
 
     try:
-        await current_tab.async_move_to_window(target_iterm_window)
+        # Use iterm2 scripting function to move tab to specific window
+        await current_tab.async_invoke_function(
+            f'iterm2.move_tab_to_window(window_id: "{target_iterm_window.window_id}")'
+        )
     except Exception as exc:
         logger.exception("Failed to move tab to existing window")
         return {"ok": False, "error": f"Failed to move tab: {exc}"}
