@@ -108,8 +108,8 @@ async def read_iterm_window_state(iterm_window: iterm2.Window) -> dict:
             })
 
         # Check if this tab is selected
-        current_tab = await iterm_window.async_get_variable("currentTab")
-        is_selected = (iterm_tab.tab_id == current_tab) if current_tab else (tab_index == 0)
+        selected_tab = iterm_window.current_tab
+        is_selected = (selected_tab is not None and iterm_tab.tab_id == selected_tab.tab_id)
 
         tabs_data.append({
             "iterm_id": iterm_tab.tab_id,
