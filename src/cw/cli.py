@@ -591,7 +591,7 @@ def cmd_windows(name: str | None, verbose: int, show_all: bool, untracked: bool)
             if is_cur:
                 arrow = click.style("▶", bold=True, fg="yellow")
                 wname_styled = click.style(f"{wname:<18}", underline=True)
-                click.echo(f"{pre}{arrow}{wname_styled}{post}")
+                click.echo(f"{pre}{arrow} {wname_styled}{post}")
             else:
                 click.echo(f"{pre} {wname_part}{post}")
         if untracked:
