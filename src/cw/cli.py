@@ -661,9 +661,10 @@ def _display_context_live(data: dict, verbose: int):
         counts_styled = click.style(f"{tab_count} tab(s), {pane_count} pane(s)", fg="yellow")
         if is_cur:
             arrow = click.style("▶", bold=True, fg="yellow")
-            click.echo(f"  {icon} {arrow}{wname_styled}  {counts_styled}")
+            # ▶ is 2 chars wide; use 1 less space before it so text aligns
+            click.echo(f"  {icon}{arrow} {wname_styled}  {counts_styled}")
         else:
-            click.echo(f"  {icon}  {wname_styled}  {counts_styled}")
+            click.echo(f"  {icon}   {wname_styled}  {counts_styled}")
 
         if verbose >= 1:
             for tab in tabs:
@@ -677,9 +678,9 @@ def _display_context_live(data: dict, verbose: int):
 
                 if is_selected:
                     arrow = click.style("▶", bold=True, fg="blue")
-                    click.echo(f"      {arrow}{tab_label}")
+                    click.echo(f"     {arrow} {tab_label}")
                 else:
-                    click.echo(f"       {tab_label}")
+                    click.echo(f"        {tab_label}")
 
                 if verbose >= 2:
                     panes = tab.get("panes", [])
@@ -691,9 +692,9 @@ def _display_context_live(data: dict, verbose: int):
                         cwd_info = f"  [{pane['cwd']}]" if pane.get("cwd") else ""
                         if pane.get("is_active"):
                             marker = click.style("▶", bold=True, fg="green")
-                            click.echo(f"      │   {connector} {marker}{pane_num} {pane_title}{cwd_info}")
+                            click.echo(f"      │   {connector}{marker} {pane_num} {pane_title}{cwd_info}")
                         else:
-                            click.echo(f"      │   {connector}  {pane_num} {pane_title}{cwd_info}")
+                            click.echo(f"      │   {connector}   {pane_num} {pane_title}{cwd_info}")
 
 
 # ─── cw move ───────────────────────────────────────────────────────
