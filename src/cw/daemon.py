@@ -945,10 +945,12 @@ async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -
     if not context:
         return {"ok": False, "error": f"Context '{context_name}' not found"}
 
-    current_window = app.current_terminal_window
-    current_window_id = current_window.window_id if current_window else None
+    # Determine which window `cw go <context>` would jump to
+    # (last focused window in this context, or first open)
+    last_focused_cw_id = _last_focused_window_per_context.get(context_name)
 
     windows_data = []
+    first_open_cw_id = None
     for cw_window in context.windows:
         if not cw_window.is_member:
             continue
@@ -966,7 +968,13 @@ async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -
         iterm_window = app.get_window_by_id(iterm_id) if iterm_id else None
         if iterm_window:
             window_info["is_open"] = True
-            window_info["is_current"] = (iterm_window.window_id == current_window_id)
+            if first_open_cw_id is None:
+                first_open_cw_id = cw_window.id
+            # Mark as current if this is where `cw go` would jump
+            if last_focused_cw_id:
+                window_info["is_current"] = (cw_window.id == last_focused_cw_id)
+            else:
+                window_info["is_current"] = (cw_window.id == first_open_cw_id)
             # Read live state
             window_state = await read_iterm_window_state(iterm_window)
             # Persist to DB as side effect
