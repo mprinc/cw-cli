@@ -1,4 +1,4 @@
-Synced with commit: f6054b7
+Synced with commit: 3d1789f
 
 # CW Архитектура
 
@@ -44,10 +44,11 @@ Synced with commit: f6054b7
 Дуготрајни Python процес који ради као iTerm2 AutoLaunch скрипта. Покреће се аутоматски са iTerm-ом.
 
 Одговорности:
-- Прати промјене layout-а (LayoutChangeMonitor)
+- Прати промјене layout-а (callback subscription)
+- Прати промјене фокуса (FocusMonitor)
 - Прати затварање сесија (SessionTerminationMonitor)
 - Прати нове сесије (NewSessionMonitor)
-- Ради периодичне checkpoint-е (сваких 30 сек)
+- Периодични checkpoint (сваких 5с, прескаче ако је монитор већ синковао)
 - Reconciliation при покретању (усаглашавање DB ↔ iTerm)
 - Unix socket сервер за CLI команде
 - Прати задњи фокусирани прозор по контексту
@@ -59,7 +60,7 @@ Synced with commit: f6054b7
 
 Click-based CLI који комуницира са daemon-ом преко Unix socket-а. За read-only операције (history) чита директно из SQLite.
 
-Команде: `list`, `create`, `join`, `leave`, `rename`, `open`, `close`, `save`, `history`, `windows`, `go`, `reload`, `status`, `backup`, `config`, `completion`
+Команде: `list`, `create`, `join`, `leave`, `move`, `rename`, `open`, `close`, `save`, `history`, `windows`, `go`, `current`, `refresh`, `reload`, `status`, `backup`, `config`, `completion`
 
 ### 3. SQLite база (`src/cw/db.py`)
 
@@ -160,6 +161,8 @@ Daemon wrapper се инсталира у:
 `~/Library/Application Support/iTerm2/Scripts/AutoLaunch/cw_daemon.py`
 
 ### Monitors
-- `LayoutChangeMonitor` — промјене у структури (split, close, resize)
+- Layout change callback — промјене у структури (split, close, resize)
+- `FocusMonitor` — промјене фокуса (таб, пане, прозор)
 - `SessionTerminationMonitor` — затварање сесије
 - `NewSessionMonitor` — нова сесија
+- Checkpoint (5с) — safety net, прескаче ако је монитор синковао

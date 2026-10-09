@@ -1,4 +1,4 @@
-Synced with commit: f6054b7
+Synced with commit: 3d1789f
 
 # Contextual-Walker
 
@@ -46,7 +46,9 @@ cw join МојПројекат/Dev         # Додај тренутни, име
 cw join МојПројекат 3           # Додај по реф броју
 cw join МојПројекат IoT         # Додај по iTerm наслову
 cw leave                        # Уклони тренутни прозор из контекста
+cw move МојПројекат/Dev         # Помјери таб у Context/Window
 cw rename Старо Ново            # Преименуј Context или Context/Window
+cw current                      # Прикажи тренутни контекст
 cw list                         # Сви Context-и са живим статусом
 cw windows                      # Прозори тренутног Context-а
 cw windows -vv                  # Са табовима + панелима + CWD
@@ -61,6 +63,7 @@ cw open МојПројекат             # Врати све назад
 cw save                         # Форсирај snapshot
 cw history МојПројекат          # Прикажи историју
 cw backup                       # Бекап базе
+cw refresh                      # Поново постави badge-ове и наслове
 cw reload                       # Reload daemon кода (без рестарта iTerm-а)
 ```
 

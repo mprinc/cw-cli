@@ -1,4 +1,4 @@
-Synced with commit: f6054b7
+Synced with commit: 3d1789f
 
 # Contextual-Walker
 
@@ -47,7 +47,9 @@ cw join MyProject/Dev         # Add current window, name it "Dev"
 cw join MyProject 3           # Add window by ref number
 cw join MyProject IoT         # Add window by iTerm title
 cw leave                      # Remove current window from its Context
+cw move MyProject/Dev         # Move current tab to Context/Window
 cw rename Old New             # Rename Context or Context/Window
+cw current                    # Show current Context
 cw list                       # All Contexts with live status
 cw windows                    # Windows in current Context
 cw windows -vv                # With tabs + panes + CWDs
@@ -62,6 +64,7 @@ cw open MyProject             # Restore everything
 cw save                       # Force a snapshot
 cw history MyProject          # View snapshots
 cw backup                     # Backup database
+cw refresh                    # Re-apply badges and window titles
 cw reload                     # Reload daemon code (no iTerm restart)
 ```
 

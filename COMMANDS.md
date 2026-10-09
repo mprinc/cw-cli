@@ -1,4 +1,4 @@
-Synced with commit: f6054b7
+Synced with commit: 3d1789f
 
 # CW Command Reference
 
@@ -242,6 +242,43 @@ cw go IoT                            # Window by iTerm title
 Tab completion shows both Context names and iTerm window titles.
 
 Use `cw go -` to toggle between two Contexts (like `cd -` in the shell).
+
+---
+
+## `cw move <context>/<window>`
+
+Move the current tab to a Context/Window. Creates Context and/or Window if they don't exist (asks for confirmation).
+
+```bash
+cw move MyProject/Dev              # Move tab to existing or new window
+cw move NewProject/Main            # Creates context + window if needed
+```
+
+If the target window is open, the tab is moved into it. If it doesn't exist, a new window is created from the tab.
+
+---
+
+## `cw current`
+
+Show which Context the current window belongs to.
+
+```bash
+cw current
+```
+
+Output: `LitTerra / ДРУЖБА` or `Current window is not tracked by any Context.`
+
+---
+
+## `cw refresh`
+
+Re-apply CW user variables (badge, context/window names) and window titles to all tracked windows.
+
+```bash
+cw refresh
+```
+
+Use after changing iTerm badge settings or after code updates that change the title format.
 
 ---
 
