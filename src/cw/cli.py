@@ -873,8 +873,8 @@ def _format_timestamp(iso_timestamp: str) -> str:
         parsed_timestamp = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
         now = datetime.now(parsed_timestamp.tzinfo)
         if parsed_timestamp.date() == now.date():
-            return parsed_timestamp.strftime("%H:%M")
-        return parsed_timestamp.strftime("%b %d")
+            return parsed_timestamp.strftime("%H:%M:%S")
+        return parsed_timestamp.strftime("%b %d %H:%M:%S")
     except (ValueError, TypeError):
         return iso_timestamp[:16]
 
