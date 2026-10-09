@@ -783,24 +783,56 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
             return {"ok": False, "error": "confirm_window"}
         # Create a new iTerm window, then move the tab into it
         try:
-            # Create empty window first
+            # Create empty window — use same profile as current tab's first session
+            profile_name = "Default"
+            if current_tab.sessions:
+                try:
+                    profile_name = await current_tab.sessions[0].async_get_variable("profileName") or "Default"
+                except Exception:
+                    pass
+
             target_iterm_window = await iterm2.Window.async_create(
-                app.connection, profile="Default",
+                app.connection, profile=profile_name,
             )
             if not target_iterm_window:
                 return {"ok": False, "error": "Failed to create new window"}
-            # Move current tab to the new window
-            await current_tab.async_move_to_window(target_iterm_window)
-            # Close the initial empty tab that was created with the window
-            initial_tabs = target_iterm_window.tabs
-            if len(initial_tabs) > 1:
-                for t in initial_tabs:
-                    if t.tab_id != current_tab.tab_id:
+
+            # Wait for iTerm to fully set up the new window
+            await asyncio.sleep(0.5)
+
+            # Refresh app state so we have current references
+            app = await iterm2.async_get_app(app.connection)
+
+            # Re-find our tab and target window with fresh references
+            fresh_tab = app.get_tab_by_id(current_tab.tab_id)
+            fresh_target = app.get_window_by_id(target_iterm_window.window_id)
+
+            if not fresh_tab or not fresh_target:
+                return {"ok": False, "error": "Lost reference to tab or window after creation"}
+
+            # Remember the placeholder tab to close later
+            placeholder_tab_id = fresh_target.tabs[0].tab_id if fresh_target.tabs else None
+
+            # Move tab to the new window
+            await fresh_tab.async_move_to_window(fresh_target)
+
+            # Wait and refresh again
+            await asyncio.sleep(0.3)
+            app = await iterm2.async_get_app(app.connection)
+            fresh_target = app.get_window_by_id(target_iterm_window.window_id)
+
+            # Close the placeholder tab
+            if fresh_target and placeholder_tab_id:
+                for t in fresh_target.tabs:
+                    if t.tab_id == placeholder_tab_id:
                         try:
                             await t.async_close(force=True)
                         except Exception:
                             pass
                         break
+
+            target_iterm_window = fresh_target
+
         except Exception as exc:
             logger.exception("Failed to move tab to new window")
             return {"ok": False, "error": f"Failed to move tab: {exc}"}
