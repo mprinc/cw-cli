@@ -781,12 +781,26 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
     if not target_cw_window:
         if not confirm_create and not args.get("create_window"):
             return {"ok": False, "error": "confirm_window"}
-        # Create a new iTerm window and CW window
+        # Create a new iTerm window, then move the tab into it
         try:
-            # Move tab to a new window by creating one from the tab
-            target_iterm_window = await current_tab.async_move_to_new_window()
+            # Create empty window first
+            target_iterm_window = await iterm2.Window.async_create(
+                app.connection, profile="Default",
+            )
             if not target_iterm_window:
-                return {"ok": False, "error": "Failed to create new window from tab"}
+                return {"ok": False, "error": "Failed to create new window"}
+            # Move current tab to the new window
+            await current_tab.async_move_to_window(target_iterm_window)
+            # Close the initial empty tab that was created with the window
+            initial_tabs = target_iterm_window.tabs
+            if len(initial_tabs) > 1:
+                for t in initial_tabs:
+                    if t.tab_id != current_tab.tab_id:
+                        try:
+                            await t.async_close(force=True)
+                        except Exception:
+                            pass
+                        break
         except Exception as exc:
             logger.exception("Failed to move tab to new window")
             return {"ok": False, "error": f"Failed to move tab: {exc}"}
