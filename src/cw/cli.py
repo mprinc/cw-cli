@@ -257,29 +257,39 @@ def cmd_join(name: str, target: str | None, window_name: str):
     """
     Add a window to an existing Context.
 
+    NAME can include /WindowName to set the window's name in the Context.
     TARGET can be a ref number or an iTerm window title.
-    If omitted, adds the current (focused) window.
+    If TARGET is omitted, adds the current (focused) window.
 
     \b
     Examples:
       cw join MyProject              add current window
+      cw join MyProject/Dev          add current window, name it "Dev"
       cw join MyProject 3            add window by ref number
       cw join MyProject IoT          add window by iTerm title
-      cw join MyProject IoT -w Dev   add and name it "Dev"
+      cw join MyProject/Dev IoT      add IoT window, name it "Dev"
     """
     name = _strip_trailing_slash(name) if name else name
-    args = {"name": name, "window_name": window_name}
+    # Parse Context/WindowName from name argument
+    if "/" in name:
+        context_name, join_window_name = name.split("/", 1)
+    else:
+        context_name = name
+        join_window_name = ""
+    # -w flag overrides /WindowName
+    effective_window_name = window_name or join_window_name
+    args = {"name": context_name, "window_name": effective_window_name}
     if target is not None:
         try:
             args["ref"] = int(target)
         except ValueError:
-            # Not a number — treat as iTerm window title
             args["iterm_title"] = target
 
     response = _daemon_required("join", args)
     if response.get("ok"):
         source = f"\"{target}\"" if target else "Current window"
-        click.echo(f"✓ {source} joined context '{name}'.")
+        win_label = f" as \"{effective_window_name}\"" if effective_window_name else ""
+        click.echo(f"✓ {source} joined context '{context_name}'{win_label}.")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)
