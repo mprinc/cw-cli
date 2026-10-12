@@ -1204,10 +1204,20 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     for window in context.windows:
         if not window.is_member:
             continue
-        if window.is_open:
-            continue  # already open
         if window_filter and window.name != window_filter:
             continue
+        # Check if ACTUALLY open in iTerm (DB may be stale)
+        iterm_id = database.get_iterm_id_for_cw(window.id)
+        actually_open = False
+        if iterm_id:
+            actually_open = app.get_window_by_id(iterm_id) is not None
+        if actually_open:
+            continue  # truly open — skip
+        # DB says open but window gone — fix DB
+        if window.is_open and not actually_open:
+            database.update_window_state(window.id, is_open=False)
+            if iterm_id:
+                database.deactivate_mappings_for_cw_id(window.id)
 
         # Restore this window
         try:
