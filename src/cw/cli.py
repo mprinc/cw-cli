@@ -386,11 +386,15 @@ def cmd_open(name: str):
     name = _strip_trailing_slash(name) if name else name
     response = _daemon_required("open", {"name": name})
     if response.get("ok"):
-        restored = response["data"].get("restored_windows", 0)
-        if restored == 0:
-            click.echo("No closed windows to restore (already open?).")
+        already_open = response["data"].get("already_open")
+        if already_open:
+            click.echo(f"Window \"{already_open}\" is already open — switched to it.")
         else:
-            click.echo(f"✓ Restored {restored} window(s).")
+            restored = response["data"].get("restored_windows", 0)
+            if restored == 0:
+                click.echo("No closed windows to restore.")
+            else:
+                click.echo(f"✓ Restored {restored} window(s).")
     else:
         click.echo(f"Error: {response.get('error')}", err=True)
         sys.exit(1)

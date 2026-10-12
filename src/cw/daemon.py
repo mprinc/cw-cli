@@ -1218,7 +1218,14 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
             actually_open = app.get_window_by_id(iterm_id) is not None
         logger.info("_cmd_open: window=%s iterm_id=%s actually_open=%s", window.name, iterm_id, actually_open)
         if actually_open:
-            continue  # truly open — skip
+            # Already open — focus it instead of restoring
+            iterm_window = app.get_window_by_id(iterm_id)
+            if iterm_window:
+                try:
+                    await iterm_window.async_activate()
+                except Exception:
+                    pass
+            return {"ok": True, "data": {"restored_windows": 0, "already_open": window.name}}
         # DB says open but window gone — fix DB
         if window.is_open and not actually_open:
             database.update_window_state(window.id, is_open=False)
