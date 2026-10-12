@@ -421,7 +421,10 @@ async def _handle_client(
         command = request.get("cmd", "")
         args = request.get("args", {})
 
-        response = await _dispatch_command(command, args, app, database)
+        # Use module-level lookup so cw reload takes effect
+        import cw.daemon as _self_module
+        dispatch = getattr(_self_module, '_dispatch_command', _dispatch_command)
+        response = await dispatch(command, args, app, database)
         writer.write(json.dumps(response, ensure_ascii=False).encode("utf-8"))
         await writer.drain()
     except Exception as exc:
