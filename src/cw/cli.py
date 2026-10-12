@@ -440,6 +440,24 @@ def cmd_close(name: str | None, yes: bool):
                         sys.exit(1)
                 else:
                     click.echo("Cancelled.")
+            elif error == "untracked":
+                prompt = (
+                    click.style("WARNING", bold=True, fg="red")
+                    + ": This window is NOT in any Context.\n"
+                    + "Closing will "
+                    + click.style("permanently lose", bold=True, fg="red")
+                    + " all history and state.\n"
+                    + "Close anyway?"
+                )
+                if click.confirm(prompt):
+                    response = _daemon_required("close_current", {"confirm": True, "untracked": True})
+                    if response.get("ok"):
+                        click.echo("✓ Window closed. History cleaned up.")
+                    else:
+                        click.echo(f"Error: {response.get('error')}", err=True)
+                        sys.exit(1)
+                else:
+                    click.echo("Cancelled. Add to a context first: cw join <context>")
             else:
                 click.echo(f"Error: {error}", err=True)
                 sys.exit(1)

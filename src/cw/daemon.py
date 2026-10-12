@@ -109,6 +109,12 @@ async def main(connection: iterm2.Connection) -> None:
     except Exception:
         logger.exception("Initial reconciliation failed — continuing anyway")
 
+    # Set HISTFILE on ALL existing sessions (tracked and untracked)
+    try:
+        await _ensure_all_sessions_have_histfile(app, database)
+    except Exception:
+        logger.exception("Failed to set HISTFILE on existing sessions")
+
     # Start all concurrent tasks
     await asyncio.gather(
         _monitor_layout_changes(connection, app, database),
@@ -254,7 +260,9 @@ async def _monitor_new_sessions(
                 session_id = await monitor.async_get()
                 try:
                     _mark_dirty()
-                    logger.debug("New session created: %s", session_id)
+                    # Immediately set up HISTFILE for EVERY new session
+                    # (even untracked ones — so history is preserved if later joined)
+                    await _setup_session_histfile(app, database, session_id)
                 except Exception:
                     logger.exception("Error handling new session %s", session_id)
     except Exception:
@@ -1207,9 +1215,37 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
                     new_iterm_window, context.id, window.id,
                     context.name, window.name,
                 )
-                # Sync the new layout
+                # Collect old pane IDs before sync replaces them
+                old_pane_ids = []
+                for tab in window.tabs:
+                    for pane in tab.panes:
+                        old_pane_ids.append(pane.id)
+
+                # Sync the new layout (generates new pane UUIDs)
                 new_state = await read_iterm_window_state(new_iterm_window)
                 database.sync_window_layout(window.id, new_state["tabs"])
+
+                # Copy history files from old pane UUIDs to new ones
+                # Match by position: old panes and new sessions in same order
+                new_session_ids = []
+                for tab_data in new_state["tabs"]:
+                    for pane_data in tab_data.get("panes", []):
+                        iterm_sid = pane_data.get("iterm_id")
+                        if iterm_sid:
+                            new_session_ids.append(iterm_sid)
+                import shutil
+                for old_id, new_sid in zip(old_pane_ids, new_session_ids):
+                    old_hist = HISTORY_DIR / old_id
+                    new_cw_id = database.get_cw_id_for_iterm(new_sid)
+                    if new_cw_id and old_hist.exists():
+                        new_hist = HISTORY_DIR / new_cw_id
+                        if not new_hist.exists():
+                            shutil.copy2(str(old_hist), str(new_hist))
+                        # Also re-set HISTFILE on the new session
+                        session = app.get_session_by_id(new_sid)
+                        if session:
+                            await _set_pane_histfile(session, new_cw_id, database)
+
                 restored_count += 1
                 logger.info("Restored window '%s' in context '%s'", window.name, context.name)
         except Exception:
@@ -1238,7 +1274,25 @@ async def _cmd_close_current(args: dict, app: iterm2.App, database: CwDatabase) 
 
     cw_id = database.get_cw_id_for_iterm(iterm_window.window_id)
     if not cw_id:
-        return {"ok": False, "error": "Current window is not tracked by any Context"}
+        # Untracked window — warn about data loss
+        if not args.get("confirm"):
+            return {"ok": False, "error": "untracked"}
+        # User confirmed — close and clean up history files for all sessions
+        for tab in iterm_window.tabs:
+            for session in tab.sessions:
+                pane_cw_id = database.get_cw_id_for_iterm(session.session_id)
+                if pane_cw_id:
+                    # Delete history file
+                    hist_file = HISTORY_DIR / pane_cw_id
+                    if hist_file.exists():
+                        hist_file.unlink()
+                    # Remove mapping
+                    database.deactivate_mappings_for_cw_id(pane_cw_id)
+        try:
+            await iterm_window.async_close(force=True)
+        except Exception:
+            pass
+        return {"ok": True}
 
     cw_window = database.get_window_by_id(cw_id)
     if not cw_window:
@@ -1878,6 +1932,54 @@ async def _set_window_cw_vars(
                 await profile.async_set_badge_text(badge)
             except Exception:
                 logger.exception("Failed to set CW vars on session %s", session.session_id)
+
+
+async def _setup_session_histfile(
+    app: iterm2.App,
+    database: CwDatabase,
+    session_id: str,
+) -> None:
+    """
+    Set up HISTFILE for a session — tracked or untracked.
+
+    If the session already has a CW pane ID mapping, use that.
+    Otherwise, generate a new UUID, create a mapping, and set HISTFILE.
+    This ensures ALL sessions have per-pane history from the start.
+
+    @param app: iTerm2 App singleton.
+    @param session_id: iTerm session ID.
+    """
+    # Check if already mapped
+    cw_pane_id = database.get_cw_id_for_iterm(session_id)
+    if not cw_pane_id:
+        # Generate UUID and create mapping for this untracked session
+        import uuid
+        cw_pane_id = str(uuid.uuid4())
+        database.set_mapping(cw_pane_id, session_id, "session")
+
+    # Find the session object in iTerm
+    session = app.get_session_by_id(session_id)
+    if session:
+        await _set_pane_histfile(session, cw_pane_id, database)
+
+
+async def _ensure_all_sessions_have_histfile(
+    app: iterm2.App,
+    database: CwDatabase,
+) -> None:
+    """
+    Set HISTFILE on ALL existing sessions (at daemon startup).
+
+    Ensures every pane has per-pane history, even sessions that
+    existed before daemon started.
+    """
+    count = 0
+    for window in app.terminal_windows:
+        for tab in window.tabs:
+            for session in tab.sessions:
+                await _setup_session_histfile(app, database, session.session_id)
+                count += 1
+    logger.info("Set HISTFILE on %d existing session(s)", count)
 
 
 async def _set_pane_histfile(
