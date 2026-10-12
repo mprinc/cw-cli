@@ -1013,7 +1013,13 @@ async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -
                     })
                 window_info["tabs"].append(tab_info)
         else:
-            # Closed window — use DB state
+            # Window not found in iTerm — mark as closed in DB if needed
+            if cw_window.is_open:
+                database.update_window_state(cw_window.id, is_open=False)
+                if iterm_id:
+                    database.deactivate_mappings_for_cw_id(cw_window.id)
+                window_info["is_open"] = False
+            # Use DB state for tabs/panes
             for tab in cw_window.tabs:
                 tab_info = {
                     "title": tab.title,
