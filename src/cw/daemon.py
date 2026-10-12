@@ -34,6 +34,8 @@ from cw.constants import (
     CHECKPOINT_INTERVAL_SECONDS,
     CW_HOME,
     DAEMON_LOG_PATH,
+    HISTORY_DIR,
+    DEFAULT_HISTORY_MAX_COMMANDS,
     ITERM_VAR_CONTEXT_ID,
     ITERM_VAR_WINDOW_ID,
     SOCKET_BUFFER_SIZE,
@@ -671,6 +673,13 @@ async def _cmd_join(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     except Exception:
         pass
     database.save_snapshot(context.id, "window_joined")
+
+    # Set per-pane HISTFILE for all sessions in the window
+    for tab in iterm_window.tabs:
+        for session in tab.sessions:
+            cw_pane_id = database.get_cw_id_for_iterm(session.session_id)
+            if cw_pane_id:
+                await _set_pane_histfile(session, cw_pane_id, database)
 
     logger.info("Window '%s' joined context '%s'", window_name, name)
     return {"ok": True, "data": {"window_id": cw_window.id}}
@@ -1741,6 +1750,9 @@ async def _restore_window(
                 await session.async_set_name(pane_data.title)
             except Exception:
                 pass
+        # Set per-pane HISTFILE so ↑ arrow shows this pane's command history
+        if pane_data.id:
+            await _set_pane_histfile(session, pane_data.id, database)
 
     # Set up the first pane
     first_session = new_window.current_tab.sessions[0] if new_window.current_tab else None
@@ -1866,6 +1878,54 @@ async def _set_window_cw_vars(
                 await profile.async_set_badge_text(badge)
             except Exception:
                 logger.exception("Failed to set CW vars on session %s", session.session_id)
+
+
+async def _set_pane_histfile(
+    session: iterm2.Session,
+    cw_pane_id: str,
+    database: CwDatabase,
+) -> None:
+    """
+    Set per-pane HISTFILE so ↑ arrow shows only commands from this pane.
+
+    Creates a history file at ~/.contextual-walker/history/<pane_id>.
+    The shell writes its history there instead of the global history file.
+
+    @param session: iTerm2 Session to configure.
+    @param cw_pane_id: CW pane UUID (used as filename).
+    @param database: CW database (for config).
+    """
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    hist_file = HISTORY_DIR / cw_pane_id
+
+    # Load config for max commands
+    config = {}
+    from cw.constants import CONFIG_PATH
+    if CONFIG_PATH.exists():
+        import json
+        try:
+            config = json.loads(CONFIG_PATH.read_text())
+        except Exception:
+            pass
+    max_commands = config.get("history_max_commands", DEFAULT_HISTORY_MAX_COMMANDS)
+
+    # Detect shell type and send appropriate HISTFILE command
+    try:
+        shell = await session.async_get_variable("shell") or ""
+    except Exception:
+        shell = ""
+
+    hist_path = _shell_escape(str(hist_file))
+    if "zsh" in shell:
+        cmd = f'export HISTFILE={hist_path}; export HISTSIZE={max_commands}; export SAVEHIST={max_commands}; fc -R 2>/dev/null\n'
+    else:
+        # bash or unknown
+        cmd = f'export HISTFILE={hist_path}; export HISTSIZE={max_commands}; export HISTFILESIZE={max_commands}; history -r 2>/dev/null\n'
+
+    try:
+        await session.async_send_text(cmd)
+    except Exception:
+        logger.debug("Failed to set HISTFILE on session %s", session.session_id)
 
 
 def _shell_escape(path: str) -> str:

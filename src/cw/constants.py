@@ -42,6 +42,12 @@ CHECKPOINT_INTERVAL_SECONDS = 5
 SOCKET_BUFFER_SIZE = 65536
 SOCKET_TIMEOUT_SECONDS = 10
 
+# ─── Per-pane shell history ────────────────────────────────────────
+# Each pane gets its own history file so ↑ arrow shows only commands
+# from that specific pane, not the global shell history.
+HISTORY_DIR = CW_HOME / "history"
+DEFAULT_HISTORY_MAX_COMMANDS = 100
+
 # ─── Backup ───────────────────────────────────────────────────────
 # Default backup directory. Can be overridden by config file.
 DEFAULT_BACKUP_DIR = CW_HOME / "backups"

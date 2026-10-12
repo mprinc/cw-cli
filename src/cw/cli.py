@@ -924,6 +924,12 @@ def cmd_backup(target: str | None):
     if daemon_log.exists():
         shutil.copy2(str(daemon_log), str(destination / "daemon.log"))
 
+    # Copy per-pane history files
+    from cw.constants import HISTORY_DIR
+    if HISTORY_DIR.exists():
+        hist_dest = destination / "history"
+        shutil.copytree(str(HISTORY_DIR), str(hist_dest))
+
     click.echo(f"✓ Backup created at: {destination}")
     click.echo(f"  Database:  {backup_db_path}")
 
@@ -941,29 +947,33 @@ def cmd_backup(target: str | None):
 # ─── cw config ─────────────────────────────────────────────────────
 
 @main.command("config")
-@click.option(
-    "--backup-dir", default=None,
-    help="Set the default backup directory.",
-)
+@click.option("--backup-dir", default=None, help="Set the default backup directory.")
+@click.option("--history-max", default=None, type=int, help="Max commands per pane history (default: 100).")
 @click.option("--show", is_flag=True, help="Show current configuration.")
-def cmd_config(backup_dir: str | None, show: bool):
+def cmd_config(backup_dir: str | None, history_max: int | None, show: bool):
     """
     View or update CW configuration.
 
     Configuration is stored in ~/.contextual-walker/config.json.
     """
+    from cw.constants import DEFAULT_HISTORY_MAX_COMMANDS
     config = _load_config()
 
-    if show or (backup_dir is None):
+    if show or (backup_dir is None and history_max is None):
         click.echo("CW Configuration:")
-        click.echo(f"  Backup dir:  {config.get('backup_dir', str(DEFAULT_BACKUP_DIR))}")
-        click.echo(f"  Config file: {CONFIG_PATH}")
+        click.echo(f"  Backup dir:       {config.get('backup_dir', str(DEFAULT_BACKUP_DIR))}")
+        click.echo(f"  History per pane:  {config.get('history_max_commands', DEFAULT_HISTORY_MAX_COMMANDS)} commands")
+        click.echo(f"  Config file:       {CONFIG_PATH}")
         return
 
     if backup_dir is not None:
         resolved = Path(backup_dir).expanduser().resolve()
         config["backup_dir"] = str(resolved)
         click.echo(f"✓ Backup directory set to: {resolved}")
+
+    if history_max is not None:
+        config["history_max_commands"] = history_max
+        click.echo(f"✓ History max commands set to: {history_max}")
 
     _save_config(config)
 
