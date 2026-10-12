@@ -209,7 +209,7 @@ async def _handle_layout_change(
                 database.deactivate_mappings_for_cw_id(mapping.cw_id)
                 logger.info("Window '%s' closed (detected by layout change)", cw_window.name)
 
-    _mark_dirty()
+    _mark_synced()
 
 
 # ─── Session termination monitor ──────────────────────────────────
@@ -234,7 +234,7 @@ async def _monitor_session_termination(
                     if cw_id:
                         database.deactivate_mappings_for_cw_id(cw_id)
                         logger.info("Session %s terminated (CW pane %s)", session_id, cw_id)
-                    _mark_dirty()
+                    _mark_synced()
                 except Exception:
                     logger.exception("Error handling session termination %s", session_id)
     except Exception:
@@ -259,7 +259,7 @@ async def _monitor_new_sessions(
             while True:
                 session_id = await monitor.async_get()
                 try:
-                    _mark_dirty()
+                    _mark_synced()
                     # Immediately set up HISTFILE for EVERY new session
                     # (even untracked ones — so history is preserved if later joined)
                     await _setup_session_histfile(app, database, session_id)
@@ -1203,8 +1203,10 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     if not context:
         return {"ok": False, "error": f"Context '{context_name}' not found"}
 
+    logger.info("_cmd_open: context=%s filter=%s windows=%d", context_name, window_filter, len(context.windows))
     restored_count = 0
     for window in context.windows:
+        logger.info("_cmd_open: checking window=%s is_member=%s is_open=%s", window.name, window.is_member, window.is_open)
         if not window.is_member:
             continue
         if window_filter and window.name != window_filter:
@@ -1214,6 +1216,7 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
         actually_open = False
         if iterm_id:
             actually_open = app.get_window_by_id(iterm_id) is not None
+        logger.info("_cmd_open: window=%s iterm_id=%s actually_open=%s", window.name, iterm_id, actually_open)
         if actually_open:
             continue  # truly open — skip
         # DB says open but window gone — fix DB
@@ -1224,7 +1227,7 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
         # Restore this window
         try:
-            new_iterm_window = await _restore_window(app, window, context)
+            new_iterm_window = await _restore_window(app, window, context, database)
             if new_iterm_window:
                 # Create new mapping for the fresh iTerm window
                 database.set_mapping(window.id, new_iterm_window.window_id, "window")
@@ -1780,6 +1783,7 @@ async def _restore_window(
     app: iterm2.App,
     window: "from cw.models import Window",
     context: "from cw.models import Context",
+    database: "CwDatabase" = None,
 ) -> iterm2.Window | None:
     """
     Restore a closed window in iTerm: create window, tabs, panes, set CWDs.
