@@ -2049,10 +2049,21 @@ async def _set_pane_histfile(
 
     hist_path = _shell_escape(str(hist_file))
     if "zsh" in shell:
-        cmd = f'export HISTFILE={hist_path}; export HISTSIZE={max_commands}; export SAVEHIST={max_commands}; fc -R 2>/dev/null\n'
+        # Clear global history, set per-pane file, load it, then clear screen
+        cmd = (
+            f' export HISTFILE={hist_path}; export HISTSIZE={max_commands};'
+            f' export SAVEHIST={max_commands}; fc -p {hist_path} 2>/dev/null;'
+            f' clear\n'
+        )
     else:
-        # bash or unknown
-        cmd = f'export HISTFILE={hist_path}; export HISTSIZE={max_commands}; export HISTFILESIZE={max_commands}; history -r 2>/dev/null\n'
+        # bash: clear global history from memory, switch to per-pane file, load it, clear screen
+        # Leading space prevents this command itself from being saved to history
+        cmd = (
+            f' export HISTFILE={hist_path}; export HISTSIZE={max_commands};'
+            f' export HISTFILESIZE={max_commands};'
+            f' history -c; history -r 2>/dev/null;'
+            f' clear\n'
+        )
 
     try:
         await session.async_send_text(cmd)
