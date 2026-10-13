@@ -2083,18 +2083,22 @@ async def _set_pane_histfile(
     hist_path = _shell_escape(str(hist_file))
     if "zsh" in shell:
         # Clear global history, set per-pane file, load it, then clear screen
+        # precmd hook flushes history to disk after every command
         cmd = (
             f' export HISTFILE={hist_path}; export HISTSIZE={max_commands};'
             f' export SAVEHIST={max_commands}; fc -p {hist_path} 2>/dev/null;'
+            f' precmd() {{ fc -W 2>/dev/null; }};'
             f' clear\n'
         )
     else:
         # bash: clear global history from memory, switch to per-pane file, load it, clear screen
+        # PROMPT_COMMAND flushes history to disk after every command
         # Leading space prevents this command itself from being saved to history
         cmd = (
             f' export HISTFILE={hist_path}; export HISTSIZE={max_commands};'
             f' export HISTFILESIZE={max_commands};'
             f' history -c; history -r 2>/dev/null;'
+            f' export PROMPT_COMMAND="history -a;$PROMPT_COMMAND";'
             f' clear\n'
         )
 
