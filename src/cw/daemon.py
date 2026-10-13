@@ -1277,36 +1277,31 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
                     new_iterm_window, context.id, window.id,
                     context.name, window.name,
                 )
-                # Collect old pane IDs before sync replaces them
+                # Pre-create mappings: OLD pane UUID → NEW iTerm session ID
+                # This ensures sync_window_layout reuses old UUIDs (preserves history files)
+                new_state = await read_iterm_window_state(new_iterm_window)
                 old_pane_ids = []
                 for tab in window.tabs:
                     for pane in tab.panes:
                         old_pane_ids.append(pane.id)
-
-                # Sync the new layout (generates new pane UUIDs)
-                new_state = await read_iterm_window_state(new_iterm_window)
-                database.sync_window_layout(window.id, new_state["tabs"])
-
-                # Copy history files from old pane UUIDs to new ones
-                # Match by position: old panes and new sessions in same order
                 new_session_ids = []
                 for tab_data in new_state["tabs"]:
                     for pane_data in tab_data.get("panes", []):
                         iterm_sid = pane_data.get("iterm_id")
                         if iterm_sid:
                             new_session_ids.append(iterm_sid)
-                import shutil
+                # Map old CW pane UUIDs to new iTerm session IDs (by position)
                 for old_id, new_sid in zip(old_pane_ids, new_session_ids):
-                    old_hist = HISTORY_DIR / f"{old_id}.history.txt"
-                    new_cw_id = database.get_cw_id_for_iterm(new_sid)
-                    if new_cw_id and old_hist.exists():
-                        new_hist = HISTORY_DIR / f"{new_cw_id}.history.txt"
-                        if not new_hist.exists():
-                            shutil.copy2(str(old_hist), str(new_hist))
-                        # Also re-set HISTFILE on the new session
-                        session = app.get_session_by_id(new_sid)
-                        if session:
-                            await _set_pane_histfile(session, new_cw_id, database)
+                    database.set_mapping(old_id, new_sid, "session")
+
+                # Now sync — will find existing mappings and reuse old UUIDs
+                database.sync_window_layout(window.id, new_state["tabs"])
+
+                # Set HISTFILE on each restored session (uses the preserved old UUID)
+                for old_id, new_sid in zip(old_pane_ids, new_session_ids):
+                    session = app.get_session_by_id(new_sid)
+                    if session:
+                        await _set_pane_histfile(session, old_id, database)
 
                 restored_count += 1
                 logger.info("Restored window '%s' in context '%s'", window.name, context.name)
@@ -1867,9 +1862,7 @@ async def _restore_window(
                 await session.async_set_name(pane_data.title)
             except Exception:
                 pass
-        # Set per-pane HISTFILE so ↑ arrow shows this pane's command history
-        if pane_data.id:
-            await _set_pane_histfile(session, pane_data.id, database)
+        # HISTFILE is set by _cmd_open after sync_window_layout
 
     # Set up the first pane
     first_session = new_window.current_tab.sessions[0] if new_window.current_tab else None

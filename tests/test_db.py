@@ -212,3 +212,116 @@ class TestSyncWindowLayout:
         assert dev_window.tabs[0].panes[0].cwd == "/home/user/frontend"
         assert dev_window.tabs[1].title == "backend"
         assert len(dev_window.tabs[1].panes) == 1
+
+    def test_sync_preserves_existing_pane_uuids(self, database: CwDatabase):
+        """sync_window_layout must reuse existing pane UUIDs when mapping exists.
+        This is critical for per-pane history files — UUID change = history lost."""
+        context = database.create_context("Proj")
+        window = database.create_window(context.id, name="Dev")
+
+        # First sync — creates initial pane UUIDs
+        tabs_data_v1 = [{
+            "title": "tab1", "tab_order": 0, "is_selected": True,
+            "iterm_id": "tab-100",
+            "panes": [
+                {"iterm_id": "sess-100", "cwd": "/app", "title": "dev"},
+                {"iterm_id": "sess-101", "cwd": "/app", "title": "git"},
+            ],
+        }]
+        database.sync_window_layout(window.id, tabs_data_v1)
+
+        # Capture the generated UUIDs
+        pane1_uuid = database.get_cw_id_for_iterm("sess-100")
+        pane2_uuid = database.get_cw_id_for_iterm("sess-101")
+        tab_uuid = database.get_cw_id_for_iterm("tab-100")
+        assert pane1_uuid is not None
+        assert pane2_uuid is not None
+
+        # Second sync — same iTerm IDs, should KEEP the same UUIDs
+        tabs_data_v2 = [{
+            "title": "tab1-updated", "tab_order": 0, "is_selected": True,
+            "iterm_id": "tab-100",
+            "panes": [
+                {"iterm_id": "sess-100", "cwd": "/app/new", "title": "dev-updated"},
+                {"iterm_id": "sess-101", "cwd": "/app", "title": "git"},
+            ],
+        }]
+        database.sync_window_layout(window.id, tabs_data_v2)
+
+        # UUIDs must be the SAME
+        assert database.get_cw_id_for_iterm("sess-100") == pane1_uuid
+        assert database.get_cw_id_for_iterm("sess-101") == pane2_uuid
+        assert database.get_cw_id_for_iterm("tab-100") == tab_uuid
+
+        # Data should be updated
+        loaded = database.get_context_by_name("Proj")
+        assert loaded.windows[0].tabs[0].title == "tab1-updated"
+        # Find pane by UUID (order may vary)
+        pane_cwds = {p.id: p.cwd for p in loaded.windows[0].tabs[0].panes}
+        assert pane_cwds[pane1_uuid] == "/app/new"
+        assert pane_cwds[pane2_uuid] == "/app"
+
+    def test_sync_generates_new_uuid_for_new_sessions(self, database: CwDatabase):
+        """New iTerm sessions (not seen before) get new UUIDs."""
+        context = database.create_context("Proj")
+        window = database.create_window(context.id, name="Dev")
+
+        tabs_data = [{
+            "title": "tab1", "tab_order": 0, "is_selected": True,
+            "iterm_id": "tab-200",
+            "panes": [
+                {"iterm_id": "sess-200", "cwd": "/app", "title": "dev"},
+            ],
+        }]
+        database.sync_window_layout(window.id, tabs_data)
+        uuid_first = database.get_cw_id_for_iterm("sess-200")
+
+        # Sync with a DIFFERENT session ID (simulates restore with new iTerm session)
+        tabs_data_new = [{
+            "title": "tab1", "tab_order": 0, "is_selected": True,
+            "iterm_id": "tab-201",
+            "panes": [
+                {"iterm_id": "sess-999", "cwd": "/app", "title": "dev"},
+            ],
+        }]
+        database.sync_window_layout(window.id, tabs_data_new)
+        uuid_new = database.get_cw_id_for_iterm("sess-999")
+
+        # New session → new UUID (different from first)
+        assert uuid_new is not None
+        assert uuid_new != uuid_first
+
+    def test_sync_preserves_uuid_after_pre_mapping(self, database: CwDatabase):
+        """Simulates cw open flow: pre-create mapping, then sync reuses it."""
+        context = database.create_context("Proj")
+        window = database.create_window(context.id, name="Dev")
+
+        # First sync — original session
+        tabs_data_v1 = [{
+            "title": "tab1", "tab_order": 0, "is_selected": True,
+            "iterm_id": "tab-300",
+            "panes": [
+                {"iterm_id": "sess-300", "cwd": "/app", "title": "dev"},
+            ],
+        }]
+        database.sync_window_layout(window.id, tabs_data_v1)
+        original_uuid = database.get_cw_id_for_iterm("sess-300")
+
+        # Simulate close: deactivate mapping
+        database.deactivate_mappings_for_cw_id(original_uuid)
+
+        # Simulate open: pre-create mapping OLD_UUID → NEW_SESSION
+        database.set_mapping(original_uuid, "sess-NEW", "session")
+
+        # Sync with new session ID
+        tabs_data_v2 = [{
+            "title": "tab1", "tab_order": 0, "is_selected": True,
+            "iterm_id": "tab-301",
+            "panes": [
+                {"iterm_id": "sess-NEW", "cwd": "/app", "title": "dev"},
+            ],
+        }]
+        database.sync_window_layout(window.id, tabs_data_v2)
+
+        # UUID must be the SAME as original (preserved across close/open)
+        assert database.get_cw_id_for_iterm("sess-NEW") == original_uuid
