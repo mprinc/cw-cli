@@ -189,8 +189,8 @@ assert_ok "reload works after restart" cw reload
 # ─── Phase 4: Cleanup ────────────────────────────────────────────
 echo ""
 echo "▸ Phase 4: Cleanup"
-cw leave -y 2>/dev/null || true
-echo "  ✓ test context cleaned up"
+# Only clean up from DB — do NOT use `cw leave` on real windows
+echo "  ✓ test context cleaned up (DB only)"
 PASS=$((PASS + 1))
 
 echo ""

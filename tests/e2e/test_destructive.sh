@@ -25,8 +25,7 @@ FAIL=0
 TEST_CTX="__cw_e2e_destructive_$$"
 
 cleanup() {
-    # Try to clean up
-    cw leave -y 2>/dev/null || true
+    # ONLY clean up test context from DB — NEVER use `cw leave` on real windows!
     python3 -c "
 from cw.db import CwDatabase
 db = CwDatabase()
@@ -124,8 +123,7 @@ echo "▸ Open already-open"
 assert_ok "restore for focus test" cw open "$TEST_CTX"
 assert_contains "open on open → switched" "already open" cw open "$TEST_CTX"
 
-# Clean up — leave the context
-cw leave -y 2>/dev/null || true
+# Clean up — only test context, not real windows
 cw close "$TEST_CTX" 2>/dev/null || true
 
 echo ""

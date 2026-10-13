@@ -20,9 +20,8 @@ FAIL=0
 TEST_CTX="__cw_e2e_test_$$"
 
 cleanup() {
-    # Remove test context silently
-    cw leave -y 2>/dev/null || true
-    # Soft-delete context from DB
+    # ONLY clean up the test context — NEVER touch real contexts!
+    # Do NOT use `cw leave` here — it affects the current window which may be real!
     python3 -c "
 from cw.db import CwDatabase
 db = CwDatabase()
