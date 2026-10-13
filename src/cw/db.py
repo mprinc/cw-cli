@@ -689,7 +689,18 @@ class CwDatabase:
             # Remove old tabs (panes cascade-deleted)
             cursor.execute("DELETE FROM tabs WHERE window_id = ?", (window_id,))
             for tab_data in tabs_data:
-                tab_id = _new_id()
+                # Reuse existing CW tab ID if mapping exists
+                iterm_tab_id = tab_data.get("iterm_id")
+                existing_tab_cw_id = None
+                if iterm_tab_id:
+                    row = cursor.execute(
+                        "SELECT cw_id FROM id_mappings WHERE iterm_id = ? AND is_active = 1",
+                        (iterm_tab_id,),
+                    ).fetchone()
+                    if row:
+                        existing_tab_cw_id = row[0]
+                tab_id = existing_tab_cw_id or _new_id()
+
                 cursor.execute(
                     """INSERT INTO tabs (id, window_id, title, tab_order, is_selected, updated_at)
                        VALUES (?, ?, ?, ?, ?, ?)""",
@@ -697,14 +708,8 @@ class CwDatabase:
                      tab_data.get("tab_order", 0),
                      int(tab_data.get("is_selected", False)), now),
                 )
-                # Map iTerm tab ID → CW tab ID
-                iterm_tab_id = tab_data.get("iterm_id")
-                if iterm_tab_id:
-                    # Deactivate old tab mapping
-                    cursor.execute(
-                        "UPDATE id_mappings SET is_active = 0 WHERE iterm_id = ? AND is_active = 1",
-                        (iterm_tab_id,),
-                    )
+                # Create mapping if new
+                if iterm_tab_id and not existing_tab_cw_id:
                     cursor.execute(
                         """INSERT OR REPLACE INTO id_mappings
                            (cw_id, iterm_id, object_type, is_active, created_at)
@@ -712,7 +717,18 @@ class CwDatabase:
                         (tab_id, iterm_tab_id, now),
                     )
                 for pane_data in tab_data.get("panes", []):
-                    pane_id = _new_id()
+                    # Reuse existing CW pane ID if mapping exists (preserves history files)
+                    iterm_session_id = pane_data.get("iterm_id")
+                    existing_cw_id = None
+                    if iterm_session_id:
+                        row = cursor.execute(
+                            "SELECT cw_id FROM id_mappings WHERE iterm_id = ? AND is_active = 1",
+                            (iterm_session_id,),
+                        ).fetchone()
+                        if row:
+                            existing_cw_id = row[0]
+                    pane_id = existing_cw_id or _new_id()
+
                     cursor.execute(
                         """INSERT INTO panes
                            (id, tab_id, parent_pane_id, split_direction,
@@ -731,19 +747,16 @@ class CwDatabase:
                          int(pane_data.get("is_active", False)),
                          now),
                     )
-                    # Map iTerm session ID → CW pane ID
-                    iterm_session_id = pane_data.get("iterm_id")
+                    # Update or create mapping
                     if iterm_session_id:
-                        cursor.execute(
-                            "UPDATE id_mappings SET is_active = 0 WHERE iterm_id = ? AND is_active = 1",
-                            (iterm_session_id,),
-                        )
-                        cursor.execute(
-                            """INSERT OR REPLACE INTO id_mappings
-                               (cw_id, iterm_id, object_type, is_active, created_at)
-                               VALUES (?, ?, 'session', 1, ?)""",
-                            (pane_id, iterm_session_id, now),
-                        )
+                        if not existing_cw_id:
+                            # New mapping
+                            cursor.execute(
+                                """INSERT OR REPLACE INTO id_mappings
+                                   (cw_id, iterm_id, object_type, is_active, created_at)
+                                   VALUES (?, ?, 'session', 1, ?)""",
+                                (pane_id, iterm_session_id, now),
+                            )
 
 
 # ─── Serialization helper ──────────────────────────────────────────
