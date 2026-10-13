@@ -494,6 +494,7 @@ def _get_handler(command: str):
         "close_current": _cmd_close_current,
         "rename": _cmd_rename,
         "refresh": _cmd_refresh,
+        "pane_history_info": _cmd_pane_history_info,
         "windows_live": _cmd_windows_live,
         "move_tab": _cmd_move_tab,
         "_complete_iterm_titles": _cmd_complete_iterm_titles,
@@ -1008,11 +1009,17 @@ async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -
                     "panes": [],
                 }
                 for pane_data in tab_data.get("panes", []):
+                    iterm_sid = pane_data.get("iterm_id", "")
+                    cw_pid = database.get_cw_id_for_iterm(iterm_sid) if iterm_sid else None
+                    hist_file = str(HISTORY_DIR / cw_pid) if cw_pid else ""
                     tab_info["panes"].append({
                         "title": pane_data.get("title", ""),
                         "cwd": pane_data.get("cwd", ""),
                         "profile": pane_data.get("profile", ""),
                         "is_active": pane_data.get("is_active", False),
+                        "iterm_id": iterm_sid,
+                        "cw_pane_id": cw_pid or "",
+                        "history_file": hist_file,
                     })
                 window_info["tabs"].append(tab_info)
         else:
@@ -1042,6 +1049,32 @@ async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -
         windows_data.append(window_info)
 
     return {"ok": True, "data": {"context_name": context_name, "windows": windows_data}}
+
+
+async def _cmd_pane_history_info(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
+    """
+    Return history file info for the current pane (active session).
+    """
+    current_window = app.current_terminal_window
+    if not current_window:
+        return {"ok": False, "error": "No focused window"}
+    current_tab = current_window.current_tab
+    if not current_tab:
+        return {"ok": False, "error": "No current tab"}
+    session = current_tab.current_session
+    if not session:
+        return {"ok": False, "error": "No current session"}
+
+    cw_pane_id = database.get_cw_id_for_iterm(session.session_id)
+    if not cw_pane_id:
+        return {"ok": False, "error": "Current pane has no CW mapping"}
+
+    hist_file = str(HISTORY_DIR / cw_pane_id)
+    return {"ok": True, "data": {
+        "cw_pane_id": cw_pane_id,
+        "iterm_id": session.session_id,
+        "history_file": hist_file,
+    }}
 
 
 async def _cmd_refresh(args: dict, app: iterm2.App, database: CwDatabase) -> dict:

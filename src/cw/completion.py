@@ -40,7 +40,7 @@ _cw_completions() {
     local cur prev commands
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    commands="list create join leave move open close save history status windows go rename current refresh reload backup config completion"
+    commands="list create join leave move open close save history history-pane status windows go rename current refresh reload backup config completion"
 
     # Complete subcommand
     if [ "$COMP_CWORD" -eq 1 ]; then

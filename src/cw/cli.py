@@ -717,6 +717,73 @@ def _display_context_live(data: dict, verbose: int):
                         else:
                             click.echo(f"      │  {connector}    {pane_num} {pane_title}{cwd_info}")
 
+                        if verbose >= 3:
+                            dim = lambda t: click.style(t, dim=True)
+                            hist = pane.get("history_file", "")
+                            cw_pid = pane.get("cw_pane_id", "")
+                            if cw_pid:
+                                click.echo(f"      │              {dim('id: ' + cw_pid)}")
+                            if hist:
+                                click.echo(f"      │              {dim('history: ' + hist)}")
+
+
+# ─── cw history-pane ───────────────────────────────────────────────
+
+@main.command("history-pane")
+@click.option("--file", "show_file", is_flag=True, help="Show history file path for current pane.")
+@click.option("--cat", "show_content", is_flag=True, help="Show contents of history file.")
+@click.option("-n", "--limit", default=20, help="Number of commands to show.")
+def cmd_history_pane(show_file: bool, show_content: bool, limit: int):
+    """
+    Show per-pane command history for the current pane.
+
+    \b
+    Examples:
+      cw history-pane              last 20 commands in this pane
+      cw history-pane -n 50        last 50 commands
+      cw history-pane --file       show history file path
+      cw history-pane --cat        show raw file contents
+    """
+    response = _daemon_required("pane_history_info")
+    if not response.get("ok"):
+        click.echo(f"Error: {response.get('error')}", err=True)
+        sys.exit(1)
+
+    data = response["data"]
+    hist_file = data.get("history_file", "")
+    cw_pane_id = data.get("cw_pane_id", "")
+
+    if not hist_file:
+        click.echo("No history file for current pane.", err=True)
+        sys.exit(1)
+
+    if show_file:
+        click.echo(hist_file)
+        return
+
+    from pathlib import Path
+    hist_path = Path(hist_file)
+    if not hist_path.exists():
+        click.echo(f"History file not found: {hist_file}")
+        click.echo("(No commands recorded yet in this pane.)")
+        return
+
+    if show_content:
+        click.echo(hist_path.read_text())
+        return
+
+    # Show last N commands
+    lines = hist_path.read_text().strip().splitlines()
+    commands = lines[-limit:] if len(lines) > limit else lines
+    if not commands:
+        click.echo("(No commands recorded yet in this pane.)")
+        return
+
+    click.echo(f"Last {len(commands)} command(s) in this pane:\n")
+    for i, cmd in enumerate(commands, 1):
+        click.echo(f"  {i:>3}  {cmd}")
+    click.echo(f"\nHistory file: {click.style(hist_file, dim=True)}")
+
 
 # ─── cw move ───────────────────────────────────────────────────────
 
