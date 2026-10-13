@@ -689,10 +689,36 @@ class CwDatabase:
             # Remove old tabs (panes cascade-deleted)
             cursor.execute("DELETE FROM tabs WHERE window_id = ?", (window_id,))
             for tab_data in tabs_data:
-                # Tab UUIDs are always fresh — tab identity doesn't matter
-                # (only pane UUIDs need stability for history files)
-                tab_id = _new_id()
+                # Reuse existing tab UUID if mapping exists (stable identity)
                 iterm_tab_id = tab_data.get("iterm_id")
+                existing_tab_cw_id = None
+                if iterm_tab_id:
+                    row = cursor.execute(
+                        "SELECT cw_id FROM id_mappings WHERE iterm_id = ? AND is_active = 1",
+                        (iterm_tab_id,),
+                    ).fetchone()
+                    if row:
+                        existing_tab_cw_id = row[0]
+                tab_id = existing_tab_cw_id or _new_id()
+
+                # If this tab UUID exists in ANOTHER window, check if that window is closed
+                # Closed window = stale data, safe to clean up
+                # Open window = real conflict, log warning
+                if existing_tab_cw_id:
+                    conflict_row = cursor.execute(
+                        """SELECT t.window_id, w.is_open FROM tabs t
+                           JOIN windows w ON w.id = t.window_id
+                           WHERE t.id = ? AND t.window_id != ?""",
+                        (tab_id, window_id),
+                    ).fetchone()
+                    if conflict_row:
+                        if not conflict_row[1]:
+                            # Closed window — stale data, clean up
+                            cursor.execute("DELETE FROM tabs WHERE id = ? AND window_id = ?",
+                                           (tab_id, conflict_row[0]))
+                        else:
+                            # Open window — real conflict, generate new UUID instead
+                            tab_id = _new_id()
 
                 cursor.execute(
                     """INSERT INTO tabs (id, window_id, title, tab_order, is_selected, updated_at)
@@ -701,7 +727,14 @@ class CwDatabase:
                      tab_data.get("tab_order", 0),
                      int(tab_data.get("is_selected", False)), now),
                 )
-                # Tab mapping not needed (only pane mappings matter for history)
+                # Update or create tab mapping
+                if iterm_tab_id and not existing_tab_cw_id:
+                    cursor.execute(
+                        """INSERT OR REPLACE INTO id_mappings
+                           (cw_id, iterm_id, object_type, is_active, created_at)
+                           VALUES (?, ?, 'tab', 1, ?)""",
+                        (tab_id, iterm_tab_id, now),
+                    )
                 for pane_data in tab_data.get("panes", []):
                     # Reuse existing CW pane ID if mapping exists (preserves history files)
                     iterm_session_id = pane_data.get("iterm_id")
@@ -714,6 +747,23 @@ class CwDatabase:
                         if row:
                             existing_cw_id = row[0]
                     pane_id = existing_cw_id or _new_id()
+
+                    # If pane UUID exists in another tab, check if that window is closed
+                    if existing_cw_id:
+                        conflict_row = cursor.execute(
+                            """SELECT p.tab_id, t.window_id, w.is_open FROM panes p
+                               JOIN tabs t ON t.id = p.tab_id
+                               JOIN windows w ON w.id = t.window_id
+                               WHERE p.id = ?""",
+                            (pane_id,),
+                        ).fetchone()
+                        if conflict_row:
+                            if not conflict_row[2]:
+                                # Closed window — stale, clean up
+                                cursor.execute("DELETE FROM panes WHERE id = ?", (pane_id,))
+                            else:
+                                # Open window — real conflict, new UUID
+                                pane_id = _new_id()
 
                     cursor.execute(
                         """INSERT INTO panes

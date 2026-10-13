@@ -557,6 +557,11 @@ async def _cmd_reload(args: dict, app: iterm2.App, database: CwDatabase) -> dict
     if reload_errors:
         return {"ok": False, "error": f"Reload failed: {'; '.join(reload_errors)}"}
 
+    # Update database instance's class to the reloaded version
+    # (importlib.reload creates a new class object; existing instances keep the old one)
+    import cw.db as _db_module
+    database.__class__ = _db_module.CwDatabase
+
     # Build warnings for user
     warnings = []
     if new_modules:

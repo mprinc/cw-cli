@@ -109,7 +109,7 @@ States: `NEW` → `UNDERSTOOD` → `IN-PROGRESS` → `SOLVED`
 
 ### BUG-007: UNIQUE constraint failed: tabs.id on join/save
 
-**Status:** IN-PROGRESS  
+**Status:** SOLVED  
 **Discovered:** 2026-10-13  
 **Severity:** High — blocks join and save for already-tracked windows
 
@@ -131,7 +131,7 @@ States: `NEW` → `UNDERSTOOD` → `IN-PROGRESS` → `SOLVED`
 
 ### BUG-008: `cw reload` doesn't update all daemon code paths
 
-**Status:** UNDERSTOOD  
+**Status:** IN-PROGRESS  
 **Discovered:** 2026-10-09 — 2026-10-13 (recurring)  
 **Severity:** Medium — requires iTerm restart for some changes
 
@@ -140,6 +140,8 @@ States: `NEW` → `UNDERSTOOD` → `IN-PROGRESS` → `SOLVED`
 **Problem:** `importlib.reload` updates module-level function definitions, but:
 
 1. **Socket handler closure** (fixed in `b89ab57`): `_handle_client` was a closure in `_socket_server` coroutine. After reload, the running coroutine still referenced old functions. Fixed by using `getattr(_self_module, '_dispatch_command')` for dynamic lookup.
+
+4. **Database instance class** (fix pending): `importlib.reload` creates a NEW class object. Existing `database` instance keeps the OLD class — its methods are NOT updated. Fix: `database.__class__ = cw.db.CwDatabase` after reload. This was the root cause of `cw reload` not picking up db.py changes (e.g. INSERT OR REPLACE).
 
 2. **Running coroutines**: Monitor coroutines (`_monitor_layout_changes`, `_periodic_checkpoint`, `_monitor_focus_changes`) are started at daemon startup via `asyncio.gather`. Reload changes the function definition but the RUNNING coroutine continues with old code. New sessions monitor behavior, checkpoint intervals, etc. require iTerm restart.
 

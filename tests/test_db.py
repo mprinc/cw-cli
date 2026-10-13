@@ -325,3 +325,75 @@ class TestSyncWindowLayout:
 
         # UUID must be the SAME as original (preserved across close/open)
         assert database.get_cw_id_for_iterm("sess-NEW") == original_uuid
+
+    def test_tab_uuid_reused_when_closed_window_has_same_tab(self, database: CwDatabase):
+        """Tab UUID from a CLOSED window should be reused (stale data cleaned up)."""
+        context = database.create_context("Proj")
+        win_a = database.create_window(context.id, name="WinA")
+        win_b = database.create_window(context.id, name="WinB")
+
+        # Sync tab into window A
+        tabs = [{"title": "tab1", "tab_order": 0, "is_selected": True,
+                 "iterm_id": "tab-400", "panes": [{"iterm_id": "s-400", "cwd": "/a"}]}]
+        database.sync_window_layout(win_a.id, tabs)
+        tab_uuid = database.get_cw_id_for_iterm("tab-400")
+        assert tab_uuid is not None
+
+        # Close window A
+        database.update_window_state(win_a.id, is_open=False)
+
+        # Sync SAME tab into window B — should reuse UUID (A is closed = stale)
+        tabs_b = [{"title": "tab1", "tab_order": 0, "is_selected": True,
+                   "iterm_id": "tab-400", "panes": [{"iterm_id": "s-400", "cwd": "/b"}]}]
+        database.sync_window_layout(win_b.id, tabs_b)
+
+        # Tab UUID preserved
+        assert database.get_cw_id_for_iterm("tab-400") == tab_uuid
+
+        # Tab now belongs to window B, not A
+        loaded = database.get_context_by_name("Proj")
+        win_b_tabs = [w for w in loaded.windows if w.name == "WinB"][0].tabs
+        assert len(win_b_tabs) == 1
+        assert win_b_tabs[0].id == tab_uuid
+
+    def test_tab_uuid_conflict_with_open_window_generates_new(self, database: CwDatabase):
+        """Tab UUID conflict with an OPEN window should generate new UUID (real conflict)."""
+        context = database.create_context("Proj")
+        win_a = database.create_window(context.id, name="WinA")
+        win_b = database.create_window(context.id, name="WinB")
+
+        # Sync tab into window A (window stays OPEN)
+        tabs_a = [{"title": "tab1", "tab_order": 0, "is_selected": True,
+                   "iterm_id": "tab-500", "panes": [{"iterm_id": "s-500", "cwd": "/a"}]}]
+        database.sync_window_layout(win_a.id, tabs_a)
+        tab_uuid_a = database.get_cw_id_for_iterm("tab-500")
+
+        # Window A stays open (is_open=True by default)
+        # Sync SAME tab ID into window B — conflict with open window
+        # Should generate NEW UUID, not crash
+        tabs_b = [{"title": "tab1", "tab_order": 0, "is_selected": True,
+                   "iterm_id": "tab-500", "panes": [{"iterm_id": "s-501", "cwd": "/b"}]}]
+        database.sync_window_layout(win_b.id, tabs_b)
+
+        # Should not crash — window B gets a different tab UUID
+        loaded = database.get_context_by_name("Proj")
+        win_b_tabs = [w for w in loaded.windows if w.name == "WinB"][0].tabs
+        assert len(win_b_tabs) == 1
+        # Tab UUID in B should be DIFFERENT from A (conflict avoided)
+        assert win_b_tabs[0].id != tab_uuid_a
+
+    def test_no_crash_on_cross_window_sync(self, database: CwDatabase):
+        """sync_window_layout must NEVER crash, regardless of cross-window state."""
+        context = database.create_context("Proj")
+        win_a = database.create_window(context.id, name="WinA")
+        win_b = database.create_window(context.id, name="WinB")
+
+        shared_tabs = [{"title": "shared", "tab_order": 0, "is_selected": True,
+                        "iterm_id": "tab-600",
+                        "panes": [{"iterm_id": "s-600", "cwd": "/shared"}]}]
+
+        # Sync to A, then to B, then to A again — no crashes
+        database.sync_window_layout(win_a.id, shared_tabs)
+        database.sync_window_layout(win_b.id, shared_tabs)
+        database.sync_window_layout(win_a.id, shared_tabs)
+        # If we got here, no crash — pass
