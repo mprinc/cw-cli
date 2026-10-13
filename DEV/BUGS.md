@@ -107,4 +107,71 @@ States: `NEW` → `UNDERSTOOD` → `IN-PROGRESS` → `SOLVED`
 
 ## Open
 
-(none currently)
+### BUG-007: UNIQUE constraint failed: tabs.id on join/save
+
+**Status:** IN-PROGRESS  
+**Discovered:** 2026-10-13  
+**Severity:** High — blocks join and save for already-tracked windows
+
+**Reproduction:** `cw join OtherContext` when current window is already in a context, or `cw save` on some contexts. Error: `UNIQUE constraint failed: tabs.id`
+
+**Problem:** `sync_window_layout` reuses existing tab UUIDs (from id_mappings) to preserve history file stability. But the same tab UUID can exist in the `tabs` table for a DIFFERENT window (from a previous sync of another context's window). `DELETE FROM tabs WHERE window_id = ?` only deletes tabs for the current window — the duplicate UUID in another window survives, causing INSERT to fail.
+
+**Root cause analysis in progress:**
+- `INSERT OR REPLACE` was added but daemon may not have picked it up via `cw reload`
+- `cw reload` reloads Python modules but existing `CwDatabase` instance methods should update (methods are on class, not instance) — needs verification
+- The fundamental issue: tab/pane UUID reuse across different CW windows when the same iTerm tab is mapped in multiple contexts
+
+**Potential fixes:**
+1. `INSERT OR REPLACE INTO tabs` — replaces existing row (may orphan panes in old window via CASCADE)
+2. Delete tab from ALL windows before inserting (not just current window_id)
+3. Don't reuse tab UUIDs — only reuse pane (session) UUIDs which are what matters for history files
+
+---
+
+### BUG-008: `cw reload` doesn't update all daemon code paths
+
+**Status:** UNDERSTOOD  
+**Discovered:** 2026-10-09 — 2026-10-13 (recurring)  
+**Severity:** Medium — requires iTerm restart for some changes
+
+**Reproduction:** Change daemon code, run `cw reload`, new code not active for some operations.
+
+**Problem:** `importlib.reload` updates module-level function definitions, but:
+
+1. **Socket handler closure** (fixed in `b89ab57`): `_handle_client` was a closure in `_socket_server` coroutine. After reload, the running coroutine still referenced old functions. Fixed by using `getattr(_self_module, '_dispatch_command')` for dynamic lookup.
+
+2. **Running coroutines**: Monitor coroutines (`_monitor_layout_changes`, `_periodic_checkpoint`, `_monitor_focus_changes`) are started at daemon startup via `asyncio.gather`. Reload changes the function definition but the RUNNING coroutine continues with old code. New sessions monitor behavior, checkpoint intervals, etc. require iTerm restart.
+
+3. **Module-level state**: `_last_focused_context`, `_last_focused_window_per_context`, `_last_sync_time` are reset on reload, losing focus tracking state.
+
+**Lesson:** `cw reload` is useful for command handler changes (join, open, close, etc.) but NOT for changes to:
+- Monitor coroutines (layout, focus, session, checkpoint)
+- Module-level state
+- Database schema or `init_schema`
+- `_set_pane_histfile` or `_ensure_all_sessions_have_histfile` (startup-only)
+
+For these, iTerm restart is required.
+
+---
+
+### BUG-009: Per-pane HISTFILE UUID instability
+
+**Status:** IN-PROGRESS  
+**Discovered:** 2026-10-13  
+**Severity:** High — history lost across close/open cycles
+
+**Reproduction:** 
+1. `cw join` assigns UUID `A` to pane, sets `HISTFILE=A.history.txt`
+2. User types commands → saved in `A.history.txt`
+3. `cw close` → saves state
+4. `cw open` → creates new iTerm session with new ID
+5. Problem: `sync_window_layout` generated NEW UUID `B` → `HISTFILE=B.history.txt` → old history in `A` orphaned
+
+**Root cause:** `sync_window_layout` deleted all tabs/panes and recreated with new UUIDs every time. Fixed in `9956a66` to reuse existing UUIDs by checking `id_mappings` first.
+
+**Additional fix needed:** Pre-create mappings (OLD_UUID → NEW_SESSION_ID) in `_cmd_open` BEFORE calling `sync_window_layout`, so sync finds existing mapping and reuses old UUID. Fixed in `7ff4d66`.
+
+**Remaining issue:** BUG-007 (UNIQUE constraint) may be a side effect of UUID reuse — needs resolution first.
+
+**Verification:** Unit tests `test_sync_preserves_existing_pane_uuids` and `test_sync_preserves_uuid_after_pre_mapping` pass.

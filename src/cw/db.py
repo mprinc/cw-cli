@@ -689,17 +689,10 @@ class CwDatabase:
             # Remove old tabs (panes cascade-deleted)
             cursor.execute("DELETE FROM tabs WHERE window_id = ?", (window_id,))
             for tab_data in tabs_data:
-                # Reuse existing CW tab ID if mapping exists
+                # Tab UUIDs are always fresh — tab identity doesn't matter
+                # (only pane UUIDs need stability for history files)
+                tab_id = _new_id()
                 iterm_tab_id = tab_data.get("iterm_id")
-                existing_tab_cw_id = None
-                if iterm_tab_id:
-                    row = cursor.execute(
-                        "SELECT cw_id FROM id_mappings WHERE iterm_id = ? AND is_active = 1",
-                        (iterm_tab_id,),
-                    ).fetchone()
-                    if row:
-                        existing_tab_cw_id = row[0]
-                tab_id = existing_tab_cw_id or _new_id()
 
                 cursor.execute(
                     """INSERT INTO tabs (id, window_id, title, tab_order, is_selected, updated_at)
@@ -708,14 +701,7 @@ class CwDatabase:
                      tab_data.get("tab_order", 0),
                      int(tab_data.get("is_selected", False)), now),
                 )
-                # Create mapping if new
-                if iterm_tab_id and not existing_tab_cw_id:
-                    cursor.execute(
-                        """INSERT OR REPLACE INTO id_mappings
-                           (cw_id, iterm_id, object_type, is_active, created_at)
-                           VALUES (?, ?, 'tab', 1, ?)""",
-                        (tab_id, iterm_tab_id, now),
-                    )
+                # Tab mapping not needed (only pane mappings matter for history)
                 for pane_data in tab_data.get("panes", []):
                     # Reuse existing CW pane ID if mapping exists (preserves history files)
                     iterm_session_id = pane_data.get("iterm_id")
