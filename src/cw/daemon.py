@@ -1011,7 +1011,7 @@ async def _cmd_windows_live(args: dict, app: iterm2.App, database: CwDatabase) -
                 for pane_data in tab_data.get("panes", []):
                     iterm_sid = pane_data.get("iterm_id", "")
                     cw_pid = database.get_cw_id_for_iterm(iterm_sid) if iterm_sid else None
-                    hist_file = str(HISTORY_DIR / cw_pid) if cw_pid else ""
+                    hist_file = str(HISTORY_DIR / f"{cw_pid}.history.txt") if cw_pid else ""
                     tab_info["panes"].append({
                         "title": pane_data.get("title", ""),
                         "cwd": pane_data.get("cwd", ""),
@@ -1069,7 +1069,7 @@ async def _cmd_pane_history_info(args: dict, app: iterm2.App, database: CwDataba
     if not cw_pane_id:
         return {"ok": False, "error": "Current pane has no CW mapping"}
 
-    hist_file = str(HISTORY_DIR / cw_pane_id)
+    hist_file = str(HISTORY_DIR / f"{cw_pane_id}.history.txt")
     return {"ok": True, "data": {
         "cw_pane_id": cw_pane_id,
         "iterm_id": session.session_id,
@@ -1297,10 +1297,10 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
                             new_session_ids.append(iterm_sid)
                 import shutil
                 for old_id, new_sid in zip(old_pane_ids, new_session_ids):
-                    old_hist = HISTORY_DIR / old_id
+                    old_hist = HISTORY_DIR / f"{old_id}.history.txt"
                     new_cw_id = database.get_cw_id_for_iterm(new_sid)
                     if new_cw_id and old_hist.exists():
-                        new_hist = HISTORY_DIR / new_cw_id
+                        new_hist = HISTORY_DIR / f"{new_cw_id}.history.txt"
                         if not new_hist.exists():
                             shutil.copy2(str(old_hist), str(new_hist))
                         # Also re-set HISTFILE on the new session
@@ -1345,7 +1345,7 @@ async def _cmd_close_current(args: dict, app: iterm2.App, database: CwDatabase) 
                 pane_cw_id = database.get_cw_id_for_iterm(session.session_id)
                 if pane_cw_id:
                     # Delete history file
-                    hist_file = HISTORY_DIR / pane_cw_id
+                    hist_file = HISTORY_DIR / f"{pane_cw_id}.history.txt"
                     if hist_file.exists():
                         hist_file.unlink()
                     # Remove mapping
@@ -2061,7 +2061,7 @@ async def _set_pane_histfile(
     @param database: CW database (for config).
     """
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    hist_file = HISTORY_DIR / cw_pane_id
+    hist_file = HISTORY_DIR / f"{cw_pane_id}.history.txt"
 
     # Load config for max commands
     config = {}
