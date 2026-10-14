@@ -52,12 +52,19 @@ from cw.reconciler import (
 
 CW_HOME.mkdir(parents=True, exist_ok=True)
 
-logging.basicConfig(
-    filename=str(DAEMON_LOG_PATH),
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+from logging.handlers import RotatingFileHandler
+from cw.constants import DAEMON_LOG_MAX_BYTES, DAEMON_LOG_BACKUP_COUNT
+
+_log_handler = RotatingFileHandler(
+    str(DAEMON_LOG_PATH),
+    maxBytes=DAEMON_LOG_MAX_BYTES,
+    backupCount=DAEMON_LOG_BACKUP_COUNT,
 )
+_log_handler.setFormatter(logging.Formatter(
+    "%(asctime)s %(levelname)s %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+logging.basicConfig(handlers=[_log_handler], level=logging.INFO)
 logger = logging.getLogger("cw.daemon")
 
 

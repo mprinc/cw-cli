@@ -17,6 +17,11 @@ SOCKET_PATH = CW_HOME / "cw.sock"
 
 # ─── Daemon log file ──────────────────────────────────────────────
 DAEMON_LOG_PATH = CW_HOME / "daemon.log"
+# Max log size before rotation (bytes). Default 50 MB.
+# Can be overridden in config.json: {"log_max_bytes": 10485760}
+DAEMON_LOG_MAX_BYTES = 50 * 1024 * 1024
+# Number of rotated backup logs to keep (daemon.log.1, daemon.log.2, ...)
+DAEMON_LOG_BACKUP_COUNT = 2
 
 # ─── iTerm2 AutoLaunch directory for daemon installation ──────────
 ITERM_SCRIPTS_DIR = (
