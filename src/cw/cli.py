@@ -1123,11 +1123,6 @@ def cmd_backup(target: str | None):
     if CONFIG_PATH.exists():
         shutil.copy2(str(CONFIG_PATH), str(destination / "config.json"))
 
-    # Copy daemon log if it exists
-    daemon_log = CW_HOME / "daemon.log"
-    if daemon_log.exists():
-        shutil.copy2(str(daemon_log), str(destination / "daemon.log"))
-
     # Copy per-pane history files
     from cw.constants import HISTORY_DIR
     if HISTORY_DIR.exists():
