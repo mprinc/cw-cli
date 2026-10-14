@@ -849,6 +849,10 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
     if not current_tab:
         return {"ok": False, "error": "No current tab found"}
 
+    # Remember source window for cleanup after move
+    source_iterm_window = current_window
+    source_cw_id = database.get_cw_id_for_iterm(current_window.window_id)
+
     # Check if context exists
     context = database.get_context_by_name(context_name)
     if not context:
@@ -928,6 +932,20 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
                 await fresh_window.async_set_title(f"{context_name} / {window_name}")
         except Exception:
             pass
+        # Sync source window (tab was removed from it)
+        if source_cw_id:
+            app = await iterm2.async_get_app(app.connection)
+            source_iterm = app.get_window_by_id(source_iterm_window.window_id)
+            if source_iterm:
+                src_state = await read_iterm_window_state(source_iterm)
+                database.sync_window_layout(source_cw_id, src_state["tabs"])
+            else:
+                # Source window was closed (it was the only tab)
+                database.update_window_state(source_cw_id, is_open=False)
+
+        # Track last-focused window in target context
+        _last_focused_window_per_context[context_name] = target_cw_window.id
+
         database.save_snapshot(context.id, "tab_moved")
         logger.info("Moved tab to new window '%s' in context '%s'", window_name, context_name)
         return {"ok": True}
@@ -946,9 +964,23 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
         logger.exception("Failed to move tab to existing window")
         return {"ok": False, "error": f"Failed to move tab: {exc}"}
 
-    # Re-sync layout
+    # Re-sync target window layout
     window_state = await read_iterm_window_state(target_iterm_window)
     database.sync_window_layout(target_cw_window.id, window_state["tabs"])
+
+    # Sync source window (tab was removed from it)
+    if source_cw_id:
+        app = await iterm2.async_get_app(app.connection)
+        source_iterm = app.get_window_by_id(source_iterm_window.window_id)
+        if source_iterm:
+            src_state = await read_iterm_window_state(source_iterm)
+            database.sync_window_layout(source_cw_id, src_state["tabs"])
+        else:
+            database.update_window_state(source_cw_id, is_open=False)
+
+    # Track last-focused window in target context
+    _last_focused_window_per_context[context_name] = target_cw_window.id
+
     database.save_snapshot(context.id, "tab_moved")
     logger.info("Moved tab to existing window '%s' in context '%s'", window_name, context_name)
     return {"ok": True}
