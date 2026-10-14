@@ -536,11 +536,17 @@ class CwDatabase:
         """
         now = _now()
         with self.transaction() as cursor:
-            # Deactivate old mappings for this CW object
+            # Deactivate old mappings for this CW object AND this iTerm ID
+            # (both directions — prevents duplicate active mappings)
             cursor.execute(
                 """UPDATE id_mappings SET is_active = 0
                    WHERE cw_id = ? AND is_active = 1""",
                 (cw_id,),
+            )
+            cursor.execute(
+                """UPDATE id_mappings SET is_active = 0
+                   WHERE iterm_id = ? AND is_active = 1""",
+                (iterm_id,),
             )
             # Insert new mapping
             cursor.execute(

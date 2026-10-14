@@ -1296,11 +1296,20 @@ async def _cmd_open(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
                         if iterm_sid:
                             new_session_ids.append(iterm_sid)
                 # Map old CW pane UUIDs to new iTerm session IDs (by position)
+                logger.info("_cmd_open: pre-mapping %d old panes → %d new sessions",
+                            len(old_pane_ids), len(new_session_ids))
                 for old_id, new_sid in zip(old_pane_ids, new_session_ids):
                     database.set_mapping(old_id, new_sid, "session")
+                    logger.info("_cmd_open: mapped %s → %s", old_id[:8], new_sid[:12])
 
                 # Now sync — will find existing mappings and reuse old UUIDs
                 database.sync_window_layout(window.id, new_state["tabs"])
+
+                # Verify UUIDs preserved
+                for new_sid in new_session_ids:
+                    cw_id = database.get_cw_id_for_iterm(new_sid)
+                    logger.info("_cmd_open: after sync session %s → cw_id %s",
+                                new_sid[:12], cw_id[:8] if cw_id else "NONE")
 
                 # Set HISTFILE on each restored session (uses the preserved old UUID)
                 for old_id, new_sid in zip(old_pane_ids, new_session_ids):
