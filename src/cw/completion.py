@@ -90,12 +90,35 @@ def transliterate(text):
             result += t[i]
             i += 1
     return result
+
+def all_transliterations(text):
+    \"\"\"Generate all possible transliterations (handles ambiguous prefixes).
+    E.g. 'S' could be 'с' or start of 'sh'→'ш', 'sk' stays 'ск'.\"\"\"
+    results = set()
+    results.add(transliterate(text))
+    # Check if the end of text could be a prefix of a multi-char mapping
+    t = text.lower()
+    for key in lat2cyr:
+        if len(key) > 1 and key.startswith(t[-1:]):
+            # Last char is start of digraph — add variant with that digraph's value
+            prefix_cyr = transliterate(t[:-1])
+            results.add(prefix_cyr + lat2cyr[key])
+        if len(key) > 2 and len(t) >= 2 and key.startswith(t[-2:]):
+            prefix_cyr = transliterate(t[:-2])
+            results.add(prefix_cyr + lat2cyr[key])
+    return results
+
 q_lower = query.lower()
-q_cyr = transliterate(query)
+q_variants = all_transliterations(query)
 for c in candidates:
     c_lower = c.lower()
-    if c_lower.startswith(q_lower) or c_lower.startswith(q_cyr):
+    if c_lower.startswith(q_lower):
         print(c)
+        continue
+    for variant in q_variants:
+        if c_lower.startswith(variant):
+            print(c)
+            break
 " "$query" "$@" 2>/dev/null
     }
 
