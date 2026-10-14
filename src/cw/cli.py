@@ -1083,7 +1083,24 @@ def cmd_restore_backup(target: str, backup_path: str, yes: bool):
                         placeholders = ",".join(["?"] * len(cols))
                         cursor.execute(f"INSERT OR REPLACE INTO panes ({','.join(cols)}) VALUES ({placeholders})", tuple(p_row))
 
-    click.echo(f"\n✓ Restored {len(backup_windows)} window(s) for '{context_name}'.")
+    # Restore per-pane history files from backup
+    from cw.constants import HISTORY_DIR
+    backup_history_dir = backup_file.parent / "history"
+    restored_history = 0
+    if backup_history_dir.exists():
+        HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+        # Only restore history files for panes being restored
+        restored_pane_ids = {p.id for w in backup_windows for t in w.tabs for p in t.panes}
+        import shutil
+        for hist_file in backup_history_dir.iterdir():
+            if hist_file.is_file() and any(pid in hist_file.name for pid in restored_pane_ids):
+                shutil.copy2(str(hist_file), str(HISTORY_DIR / hist_file.name))
+                restored_history += 1
+
+    msg = f"\n✓ Restored {len(backup_windows)} window(s) for '{context_name}'."
+    if restored_history:
+        msg += f"\n  + {restored_history} history file(s)"
+    click.echo(msg)
 
     backup_db.close()
     live_db.close()
