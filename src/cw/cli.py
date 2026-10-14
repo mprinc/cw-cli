@@ -966,6 +966,111 @@ def cmd_status():
         sys.exit(1)
 
 
+# ─── cw restore-backup ─────────────────────────────────────────────
+
+@main.command("restore-backup")
+@click.argument("target")
+@click.option("--from", "backup_path", required=True, help="Path to backup cw.sqlite file or backup folder.")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation.")
+def cmd_restore_backup(target: str, backup_path: str, yes: bool):
+    """
+    Restore a Context (or Context/Window) from a backup database.
+
+    Replaces the current state in DB with state from the backup.
+    Use `cw backup` to see available backups.
+
+    \b
+    Examples:
+      cw restore-backup Дружба --from ~/.contextual-walker/backups/2026-10-13_20-28-14
+      cw restore-backup Дружба/Школа --from /path/to/cw.sqlite
+    """
+    from cw.db import CwDatabase
+    target = _strip_trailing_slash(target) if target else target
+    context_name, _, window_filter = target.partition("/")
+    window_filter = window_filter.strip()
+
+    # Resolve backup path
+    backup_file = Path(backup_path)
+    if backup_file.is_dir():
+        backup_file = backup_file / "cw.sqlite"
+    if not backup_file.exists():
+        click.echo(f"Error: backup not found: {backup_file}", err=True)
+        sys.exit(1)
+
+    # Open backup DB
+    backup_db = CwDatabase(db_path=backup_file)
+    backup_ctx = backup_db.get_context_by_name(context_name)
+    if not backup_ctx:
+        backup_db.close()
+        click.echo(f"Error: Context '{context_name}' not found in backup.", err=True)
+        sys.exit(1)
+
+    # Show what will be restored
+    backup_windows = [w for w in backup_ctx.windows if w.is_member]
+    if window_filter:
+        backup_windows = [w for w in backup_windows if w.name == window_filter]
+    if not backup_windows:
+        backup_db.close()
+        click.echo(f"Error: no matching windows in backup.", err=True)
+        sys.exit(1)
+
+    click.echo(f"\nWill restore from: {backup_file}")
+    click.echo(f"Context: {context_name}\n")
+    for w in backup_windows:
+        tab_count = len(w.tabs)
+        pane_count = sum(len(t.panes) for t in w.tabs)
+        click.echo(f"  {w.name:<25} {tab_count} tab(s), {pane_count} pane(s)")
+
+    if not yes:
+        click.echo("")
+        if not click.confirm("Restore? This REPLACES current state for these windows."):
+            click.echo("Cancelled.")
+            backup_db.close()
+            return
+
+    # Open live DB and restore
+    live_db = CwDatabase()
+    live_ctx = live_db.get_context_by_name(context_name)
+
+    with live_db.transaction() as cursor:
+        if live_ctx:
+            # Delete existing windows that match
+            for w in live_ctx.windows:
+                if window_filter and w.name != window_filter:
+                    continue
+                cursor.execute("DELETE FROM tabs WHERE window_id = ?", (w.id,))
+                cursor.execute("DELETE FROM windows WHERE id = ?", (w.id,))
+
+        # Copy from backup
+        for w in backup_windows:
+            # Copy window
+            w_row = backup_db.conn.execute("SELECT * FROM windows WHERE id = ?", (w.id,)).fetchone()
+            if w_row:
+                cols = [desc[0] for desc in backup_db.conn.execute("SELECT * FROM windows LIMIT 0").description]
+                placeholders = ",".join(["?"] * len(cols))
+                cursor.execute(f"INSERT OR REPLACE INTO windows ({','.join(cols)}) VALUES ({placeholders})", tuple(w_row))
+
+            # Copy tabs and panes
+            for tab in w.tabs:
+                t_row = backup_db.conn.execute("SELECT * FROM tabs WHERE id = ?", (tab.id,)).fetchone()
+                if t_row:
+                    cols = [desc[0] for desc in backup_db.conn.execute("SELECT * FROM tabs LIMIT 0").description]
+                    placeholders = ",".join(["?"] * len(cols))
+                    cursor.execute(f"INSERT OR REPLACE INTO tabs ({','.join(cols)}) VALUES ({placeholders})", tuple(t_row))
+
+                for pane in tab.panes:
+                    p_row = backup_db.conn.execute("SELECT * FROM panes WHERE id = ?", (pane.id,)).fetchone()
+                    if p_row:
+                        cols = [desc[0] for desc in backup_db.conn.execute("SELECT * FROM panes LIMIT 0").description]
+                        placeholders = ",".join(["?"] * len(cols))
+                        cursor.execute(f"INSERT OR REPLACE INTO panes ({','.join(cols)}) VALUES ({placeholders})", tuple(p_row))
+
+    click.echo(f"\n✓ Restored {len(backup_windows)} window(s) for '{context_name}'.")
+
+    backup_db.close()
+    live_db.close()
+
+
 # ─── cw backup ─────────────────────────────────────────────────────
 
 @main.command("backup")
