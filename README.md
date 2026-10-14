@@ -1,4 +1,4 @@
-Synced with commit: 8ae6d0c
+Synced with commit: f67f8c4
 
 # Contextual-Walker
 
@@ -63,6 +63,7 @@ cw close MyProject            # Save state and close all windows
 cw open MyProject             # Restore everything
 cw save                       # Force a snapshot
 cw history MyProject          # View snapshots
+cw history-pane               # Per-pane command history (↑ arrow)
 cw backup                     # Backup database
 cw refresh                    # Re-apply badges and window titles
 cw reload                     # Reload daemon code (no iTerm restart)

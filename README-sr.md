@@ -1,4 +1,4 @@
-Synced with commit: 8ae6d0c
+Synced with commit: f67f8c4
 
 # Contextual-Walker
 
@@ -62,6 +62,7 @@ cw close МојПројекат            # Сачувај и затвори
 cw open МојПројекат             # Врати све назад
 cw save                         # Форсирај snapshot
 cw history МојПројекат          # Прикажи историју
+cw history-pane                 # Историја команди текућег панела
 cw backup                       # Бекап базе
 cw refresh                      # Поново постави badge-ове и наслове
 cw reload                       # Reload daemon кода (без рестарта iTerm-а)

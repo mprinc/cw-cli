@@ -1,4 +1,4 @@
-Synced with commit: 8ae6d0c
+Synced with commit: f67f8c4
 
 # CW Референца команди
 
@@ -262,6 +262,26 @@ cw current
 ```bash
 cw refresh
 ```
+
+---
+
+## `cw history-pane`
+
+Приказује историју команди тренутног панела. Сваки панел има изоловану shell историју.
+
+```bash
+cw history-pane              # Задњих 20 команди
+cw history-pane -n 50        # Задњих 50
+cw history-pane --file       # Путања до history фајла
+cw history-pane --cat        # Сиров садржај фајла
+```
+
+Опције:
+- `-n`, `--limit INT` — број команди (подразумевано: 20)
+- `--file` — само путања до фајла
+- `--cat` — сиров садржај
+
+Историја се чува преко close/open циклуса (стабилан UUID).
 
 ---
 

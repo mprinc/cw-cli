@@ -1,4 +1,4 @@
-Synced with commit: 8ae6d0c
+Synced with commit: f67f8c4
 
 # CW Command Reference
 
@@ -279,6 +279,26 @@ cw refresh
 ```
 
 Use after changing iTerm badge settings or after code updates that change the title format.
+
+---
+
+## `cw history-pane`
+
+Show per-pane command history for the current pane. Each pane has its own isolated shell history.
+
+```bash
+cw history-pane              # Last 20 commands in this pane
+cw history-pane -n 50        # Last 50 commands
+cw history-pane --file       # Show history file path
+cw history-pane --cat        # Show raw file contents
+```
+
+Options:
+- `-n`, `--limit INT` — number of commands to show (default: 20)
+- `--file` — print history file path only
+- `--cat` — print raw file contents
+
+History is preserved across `cw close` / `cw open` cycles (UUID stays stable).
 
 ---
 

@@ -1,4 +1,4 @@
-Synced with commit: 8ae6d0c
+Synced with commit: f67f8c4
 
 # CW Features
 
@@ -28,10 +28,12 @@ Synced with commit: 8ae6d0c
 - **List** all Contexts with live DB ↔ iTerm comparison (`cw list`)
 - **Windows** — view by Context, all, or untracked only (`cw windows`)
   - Reads live iTerm state (not stale DB)
-  - Detail levels: `-v` (tabs with numbers), `-vv` (+ panes with numbers + CWDs)
+  - Detail levels: `-v` (tabs), `-vv` (+ panes + CWDs), `-vvv` (+ pane UUID + history file path)
   - Color coded: yellow bold window names, blue tabs, bold pane numbers
-  - Markers: `▶` for current window (yellow), selected tab (blue), active pane (green)
+  - Markers: `▶` for last-used window (yellow), selected tab (blue), active pane (green)
   - Auto-detects current Context when no name given
+- **History-pane** — per-pane command history (`cw history-pane`)
+  - `--file` shows history file path, `--cat` shows raw contents
 - **Current** — show which Context the current window belongs to (`cw current`)
 - **Go** — jump to window by Context, ref number, or iTerm title (`cw go`)
   - Remembers last-used window per Context
@@ -43,6 +45,8 @@ Synced with commit: 8ae6d0c
 - **Close** — save-before-close principle; aborts if save fails (`cw close`)
   - Without arguments closes current window (with confirmation)
 - **Open** — restores window position, tabs, panes, CWDs, tab titles, session names (`cw open`)
+  - Already-open window → focuses it instead of error
+  - Per-pane history preserved across close/open (stable UUID)
 - **Save** — explicit snapshot (`cw save`)
 - **History** — view snapshots with full timestamps (`cw history`)
 
@@ -62,9 +66,19 @@ Synced with commit: 8ae6d0c
 - User variables on sessions for reconciliation
 - AutoLaunch daemon — starts with iTerm
 
+## Per-pane Shell History
+
+- Every pane gets its own HISTFILE (`~/.contextual-walker/history/<UUID>.history.txt`)
+- ↑ arrow shows only commands from that specific pane
+- ALL sessions get HISTFILE at daemon start (tracked and untracked)
+- History flushed to disk after every command (`PROMPT_COMMAND`)
+- UUID preserved across close/open cycles (stable pane identity)
+- Configurable max commands per pane (`cw config --history-max`)
+
 ## Daemon
 
-- Hot-reload (`cw reload`) — no iTerm restart for code changes
+- Hot-reload (`cw reload`) — no iTerm restart for command handler changes
+- `database.__class__` updated on reload (fixes stale DB method references)
 - Detects new modules that require restart
 - All handlers in try/except — never affects iTerm stability
 - Smart checkpoint: skips if a monitor already synced recently
@@ -72,6 +86,7 @@ Synced with commit: 8ae6d0c
 ## Backup & Config
 
 - Timestamped backups with SQLite backup API (`cw backup`)
+- Backup includes per-pane history files
 - Configurable backup directory (`cw config --backup-dir`)
 - Uninstall always creates backup first
 
@@ -81,3 +96,12 @@ Synced with commit: 8ae6d0c
 - Auto-detects Python, creates venv, installs daemon, man pages, completion
 - Configurable backup dir at install time (`--backup-dir`)
 - Idempotent — safe to re-run
+
+## Testing
+
+- 74 unit tests (DB, models, CLI, completion, config, migration, daemon commands)
+- Mock iTerm2 API for daemon command testing without live iTerm
+- 19 safe e2e tests (no window disruption)
+- 18 destructive e2e tests (creates/closes windows)
+- 11 restart e2e tests (restarts iTerm, user confirmation required)
+- UUID stability tests: checkpoint, close/open cycle, pre-mapping

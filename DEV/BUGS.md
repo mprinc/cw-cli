@@ -1,4 +1,4 @@
-Synced with commit: 8ae6d0c
+Synced with commit: f67f8c4
 
 # Known Bugs & Fixes
 
@@ -159,7 +159,7 @@ For these, iTerm restart is required.
 
 ### BUG-009: Per-pane HISTFILE UUID instability
 
-**Status:** IN-PROGRESS  
+**Status:** SOLVED  
 **Discovered:** 2026-10-13  
 **Severity:** High — history lost across close/open cycles
 
@@ -174,6 +174,6 @@ For these, iTerm restart is required.
 
 **Additional fix needed:** Pre-create mappings (OLD_UUID → NEW_SESSION_ID) in `_cmd_open` BEFORE calling `sync_window_layout`, so sync finds existing mapping and reuses old UUID. Fixed in `7ff4d66`.
 
-**Remaining issue:** BUG-007 (UNIQUE constraint) may be a side effect of UUID reuse — needs resolution first.
+**Final fix:** `set_mapping` now deactivates by BOTH `cw_id` AND `iterm_id` (`57b7709`). This prevents NewSessionMonitor from stealing the UUID during restore. E2e test `test_destructive.sh` verifies marker command preserved across close/open.
 
 **Verification:** Unit tests `test_sync_preserves_existing_pane_uuids` and `test_sync_preserves_uuid_after_pre_mapping` pass.
