@@ -989,9 +989,17 @@ def cmd_restore_backup(target: str, backup_path: str, yes: bool):
     context_name, _, window_filter = target.partition("/")
     window_filter = window_filter.strip()
 
-    # Resolve backup path
+    # Resolve backup path (supports .zip, directory, or direct .sqlite)
+    import tempfile
+    import zipfile
+
     backup_file = Path(backup_path)
-    if backup_file.is_dir():
+    _tmp_dir = None  # keeps temp dir alive until function exits
+    if backup_file.suffix == ".zip" and backup_file.is_file():
+        _tmp_dir = tempfile.TemporaryDirectory()
+        zipfile.ZipFile(backup_file).extractall(_tmp_dir.name)
+        backup_file = Path(_tmp_dir.name) / "cw.sqlite"
+    elif backup_file.is_dir():
         backup_file = backup_file / "cw.sqlite"
     if not backup_file.exists():
         click.echo(f"Error: backup not found: {backup_file}", err=True)
@@ -1098,49 +1106,57 @@ def cmd_backup(target: str | None):
     The backup directory can be configured during install or
     with: cw config --backup-dir /path/to/backups
     """
+    import shutil
+    import sqlite3
+    import tempfile
+    import zipfile
+    from cw.constants import HISTORY_DIR
+
     backup_dir = _resolve_backup_dir(target)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    destination = backup_dir / timestamp
 
     if not DB_PATH.exists():
         click.echo("No CW database found — nothing to backup.", err=True)
         sys.exit(1)
 
-    destination.mkdir(parents=True, exist_ok=True)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = backup_dir / f"{timestamp}.zip"
 
-    # Copy database (use SQLite backup API for consistency)
-    import shutil
-    import sqlite3
+    # Build backup in a temp dir, then zip it
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
 
-    backup_db_path = destination / "cw.sqlite"
-    source_conn = sqlite3.connect(str(DB_PATH))
-    backup_conn = sqlite3.connect(str(backup_db_path))
-    source_conn.backup(backup_conn)
-    backup_conn.close()
-    source_conn.close()
+        # Copy database (SQLite backup API for consistency)
+        backup_db_path = tmp_dir / "cw.sqlite"
+        source_conn = sqlite3.connect(str(DB_PATH))
+        backup_conn = sqlite3.connect(str(backup_db_path))
+        source_conn.backup(backup_conn)
+        backup_conn.close()
+        source_conn.close()
 
-    # Copy config if it exists
-    if CONFIG_PATH.exists():
-        shutil.copy2(str(CONFIG_PATH), str(destination / "config.json"))
+        # Copy config if it exists
+        if CONFIG_PATH.exists():
+            shutil.copy2(str(CONFIG_PATH), str(tmp_dir / "config.json"))
 
-    # Copy per-pane history files
-    from cw.constants import HISTORY_DIR
-    if HISTORY_DIR.exists():
-        hist_dest = destination / "history"
-        shutil.copytree(str(HISTORY_DIR), str(hist_dest))
+        # Copy per-pane history files
+        if HISTORY_DIR.exists():
+            shutil.copytree(str(HISTORY_DIR), str(tmp_dir / "history"))
 
-    click.echo(f"✓ Backup created at: {destination}")
-    click.echo(f"  Database:  {backup_db_path}")
+        # Zip everything
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file in tmp_dir.rglob("*"):
+                if file.is_file():
+                    zf.write(file, file.relative_to(tmp_dir))
 
-    # Show backup size
-    total_size = sum(f.stat().st_size for f in destination.iterdir())
-    if total_size < 1024:
-        size_str = f"{total_size} B"
-    elif total_size < 1024 * 1024:
-        size_str = f"{total_size / 1024:.1f} KB"
+    zip_size = zip_path.stat().st_size
+    if zip_size < 1024:
+        size_str = f"{zip_size} B"
+    elif zip_size < 1024 * 1024:
+        size_str = f"{zip_size / 1024:.1f} KB"
     else:
-        size_str = f"{total_size / (1024 * 1024):.1f} MB"
-    click.echo(f"  Size:      {size_str}")
+        size_str = f"{zip_size / (1024 * 1024):.1f} MB"
+    click.echo(f"✓ Backup created: {zip_path}")
+    click.echo(f"  Size: {size_str}")
 
 
 # ─── cw config ─────────────────────────────────────────────────────
