@@ -146,6 +146,13 @@ for c in candidates:
         done
     }
 
+    # If previous word is a flag that takes a file/dir path, use file completion
+    if [[ "$prev" == "--from" || "$prev" == "--target" || "$prev" == "-t" || "$prev" == "--backup-dir" ]]; then
+        compopt +o nospace 2>/dev/null
+        COMPREPLY=( $(compgen -d -f -- "$cur") )
+        return
+    fi
+
     if [ "$COMP_CWORD" -eq 2 ]; then
         # First argument after command — context names (or target for go/rename)
         case "$cmd" in
