@@ -61,18 +61,26 @@ query = sys.argv[1]
 candidates = sys.argv[2:]
 # Latin → Cyrillic mapping (Serbian)
 lat2cyr = {
+    # Standard Serbian Latin (diacritics)
     'a':'а','b':'б','v':'в','g':'г','d':'д','đ':'ђ','e':'е','ž':'ж',
     'z':'з','i':'и','j':'ј','k':'к','l':'л','lj':'љ','m':'м','n':'н',
     'nj':'њ','o':'о','p':'п','r':'р','s':'с','t':'т','ć':'ћ','u':'у',
     'f':'ф','h':'х','c':'ц','č':'ч','dž':'џ','š':'ш',
+    # ASCII digraphs (baby latinica / informal)
     'dj':'ђ','zh':'ж','nj':'њ','lj':'љ','dz':'џ',
+    'sh':'ш','ch':'ч','cj':'ћ','zj':'ж',
+    # 3-char combos (must be checked before 2-char)
+    'dzh':'џ',
 }
 def transliterate(text):
     result = ''
     i = 0
     t = text.lower()
     while i < len(t):
-        if i+2 <= len(t) and t[i:i+2] in lat2cyr:
+        if i+3 <= len(t) and t[i:i+3] in lat2cyr:
+            result += lat2cyr[t[i:i+3]]
+            i += 3
+        elif i+2 <= len(t) and t[i:i+2] in lat2cyr:
             result += lat2cyr[t[i:i+2]]
             i += 2
         elif t[i] in lat2cyr:
