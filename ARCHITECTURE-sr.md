@@ -334,17 +334,23 @@ Daemon wrapper се инсталира у:
 
 ### Сценарио: Checkpoint (сваких 5с)
 
+Daemon периодично освјежава стање свих tracked прозора. Циљ: DB увијек одражава тренутно стање iTerm-а.
+
 ```
-1. daemon._do_checkpoint → sync_window_layout(W1, live_state)
-2. DELETE FROM tabs WHERE window_id=W1 (CASCADE брише panes)
-3. За tab "tab-11":
-   - SELECT cw_id FROM id_mappings WHERE iterm_id="tab-11" → T1
-   - INSERT INTO tabs (id=T1) ← ИСТИ UUID
-4. За session "sess-XYZ":
-   - SELECT cw_id FROM id_mappings WHERE iterm_id="sess-XYZ" → N1
-   - INSERT INTO panes (id=N1) ← ИСТИ UUID
+1. Daemon чита живо стање из iTerm-а (табови, панели, CWD, наслови)
+2. Брише старе табове/панеле за овај прозор из DB
+3. За сваки таб:
+   - Тражи: "да ли овај iTerm таб ИМА постојећи CW UUID?" (из mapping-а)
+   - Ако да → задржава стари UUID
+   - Ако не → генерише нови
+4. За сваки панел (сесију):
+   - Исто: тражи постојећи UUID из mapping-а
+   - Ако да → задржава стари UUID (КРИТИЧНО — history фајл остаје исти!)
+   - Ако не → генерише нови
+5. Уписује свјеже податке (CWD, наслов, геометрију) у DB
 
 Резултат: UUID-ови НЕПРОМИЈЕЊЕНИ. History фајл исти.
+Ажурирани су само подаци (CWD, наслов, итд).
 ```
 
 ### Сценарио: Затварање (cw close MyProject)
