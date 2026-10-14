@@ -1,4 +1,4 @@
-Synced with commit: f67f8c4
+Synced with commit: dbf35d5
 
 # CW Референца команди
 
@@ -348,6 +348,24 @@ cw backup --target ~/Documents/CW-Backups       # Експлицитна дес�
 
 ---
 
+## `cw restore-backup <циљ>`
+
+Ресторирај Context или Window из бекап базе. Замјењује тренутно стање са подацима из бекапа.
+
+```bash
+cw restore-backup Дружба --from ~/.contextual-walker/backups/2026-10-13_20-28-14
+cw restore-backup Дружба/Школа --from /path/to/cw.sqlite
+cw restore-backup Дружба --from /path/to/backup -y    # без потврде
+```
+
+Опције:
+- `--from PATH` — путања до бекап фолдера или `cw.sqlite` фајла (обавезно)
+- `-y`, `--yes` — прескочи потврду
+
+Приказује шта ће бити ресторирано прије акције. Деактивира конфликтне mapping-е да преживи daemon checkpoint.
+
+---
+
 ## `cw config`
 
 Прегледај или ажурирај CW конфигурацију.
@@ -388,7 +406,11 @@ cw open МојПројекат/<TAB>          → Development, Инфрастр�
 cw close LitTerra/Dr<TAB>          → LitTerra/ДРУЖБА
 ```
 
-Completion је **case-insensitive** и подржава **латиница→ћирилица транслитерацију** (нпр. `Dr` матчује `ДРУЖБА`, `lit` матчује `LitTerra`).
+Completion је **case-insensitive** и подржава **латиница→ћирилица транслитерацију** са fuzzy digraph matching-ом:
+- `Dr` матчује `ДРУЖБА`
+- `Sk` матчује `Школа` (S може бити Sh→Ш)
+- `D` матчује `Дружба`, `Ђорђе`, `Џеп` (D може бити Dj→Ђ или Dz→Џ)
+- Бејби латиница: `sh`→ш, `ch`→ч, `dzh`→џ, `cj`→ћ
 
 ---
 

@@ -1,4 +1,4 @@
-Synced with commit: 57b7709
+Synced with commit: dbf35d5
 
 # CW Архитектура
 

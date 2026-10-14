@@ -1,4 +1,4 @@
-Synced with commit: f67f8c4
+Synced with commit: dbf35d5
 
 # Contextual-Walker
 
@@ -64,6 +64,7 @@ cw save                         # Форсирај snapshot
 cw history МојПројекат          # Прикажи историју
 cw history-pane                 # Историја команди текућег панела
 cw backup                       # Бекап базе
+cw restore-backup Ctx --from ~/.contextual-walker/backups/2026-10-13
 cw refresh                      # Поново постави badge-ове и наслове
 cw reload                       # Reload daemon кода (без рестарта iTerm-а)
 ```

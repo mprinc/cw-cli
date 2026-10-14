@@ -1,4 +1,4 @@
-Synced with commit: f67f8c4
+Synced with commit: dbf35d5
 
 # CW Features
 
@@ -56,7 +56,8 @@ Synced with commit: f67f8c4
 - Context names with `/` suffix for window drill-down
 - iTerm window titles for `go`, `join`, `leave`
 - Case-insensitive matching
-- Latin → Cyrillic transliteration (e.g. `Dr` → `ДРУЖБА`)
+- Latin → Cyrillic transliteration with fuzzy digraph matching (`S` matches `Школа`, `Sk` matches `Школа`)
+- Baby latinica support (`sh`→ш, `ch`→ч, `dzh`→џ, `cj`→ћ)
 
 ## iTerm Integration
 
@@ -88,6 +89,7 @@ Synced with commit: f67f8c4
 - Timestamped backups with SQLite backup API (`cw backup`)
 - Backup includes per-pane history files
 - Configurable backup directory (`cw config --backup-dir`)
+- **Restore from backup** (`cw restore-backup`) — restore Context/Window from any backup
 - Uninstall always creates backup first
 
 ## Installation

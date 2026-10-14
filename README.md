@@ -1,4 +1,4 @@
-Synced with commit: f67f8c4
+Synced with commit: dbf35d5
 
 # Contextual-Walker
 
@@ -65,6 +65,7 @@ cw save                       # Force a snapshot
 cw history MyProject          # View snapshots
 cw history-pane               # Per-pane command history (↑ arrow)
 cw backup                     # Backup database
+cw restore-backup Ctx --from ~/.contextual-walker/backups/2026-10-13
 cw refresh                    # Re-apply badges and window titles
 cw reload                     # Reload daemon code (no iTerm restart)
 ```

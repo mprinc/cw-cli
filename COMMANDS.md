@@ -1,4 +1,4 @@
-Synced with commit: f67f8c4
+Synced with commit: dbf35d5
 
 # CW Command Reference
 
@@ -365,6 +365,24 @@ The uninstall script calls `cw backup` automatically before removing anything.
 
 ---
 
+## `cw restore-backup <target>`
+
+Restore a Context or Window from a backup database. Replaces current state with data from the backup.
+
+```bash
+cw restore-backup Дружба --from ~/.contextual-walker/backups/2026-10-13_20-28-14
+cw restore-backup Дружба/Школа --from /path/to/cw.sqlite
+cw restore-backup Дружба --from /path/to/backup -y    # skip confirmation
+```
+
+Options:
+- `--from PATH` — path to backup folder or `cw.sqlite` file (required)
+- `-y`, `--yes` — skip confirmation
+
+Shows what will be restored before asking. Deactivates conflicting mappings to survive daemon checkpoints.
+
+---
+
 ## `cw config`
 
 View or update CW configuration.
@@ -405,7 +423,11 @@ cw open MyProject/<TAB>         → Development, Infrastructure, ...
 cw close LitTerra/Dr<TAB>       → LitTerra/ДРУЖБА
 ```
 
-Completion is **case-insensitive** and supports **Latin→Cyrillic transliteration** (e.g. `Dr` matches `ДРУЖБА`, `lit` matches `LitTerra`).
+Completion is **case-insensitive** and supports **Latin→Cyrillic transliteration** with fuzzy digraph matching:
+- `Dr` matches `ДРУЖБА`
+- `Sk` matches `Школа` (S could be Sh→Ш)
+- `D` matches `Дружба`, `Ђорђе`, `Џеп` (D could be Dj→Ђ or Dz→Џ)
+- Baby latinica: `sh`→ш, `ch`→ч, `dzh`→џ, `cj`→ћ
 
 ---
 
