@@ -802,6 +802,9 @@ async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
     database.deactivate_mappings_for_cw_id(cw_id)
 
     # Clear CW user variables from all sessions in this window
+    if not iterm_window:
+        logger.info("Window '%s' left context '%s' (no iTerm window)", cw_window.name, context_name)
+        return {"ok": True, "data": {"context_name": context_name, "window_name": cw_window.name}}
     for tab in iterm_window.tabs:
         for session in tab.sessions:
             try:
@@ -817,6 +820,32 @@ async def _cmd_leave(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
 
     logger.info("Window '%s' left context '%s'", cw_window.name, context_name)
     return {"ok": True, "data": {"context_name": context_name, "window_name": cw_window.name}}
+
+
+async def _sync_source_after_move(
+    source_cw_id: str | None,
+    source_iterm_window,
+    app: iterm2.App,
+    database: CwDatabase,
+) -> None:
+    """
+    After moving a tab out of a window, sync the source window's DB state.
+
+    If the source iTerm window no longer exists (last tab was moved out),
+    mark it closed and remove membership. If it still exists, re-sync layout.
+    """
+    if not source_cw_id:
+        return
+    app = await iterm2.async_get_app(app.connection)
+    source_iterm = app.get_window_by_id(source_iterm_window.window_id)
+    if source_iterm:
+        src_state = await read_iterm_window_state(source_iterm)
+        database.sync_window_layout(source_cw_id, src_state["tabs"])
+    else:
+        # Source window was closed (last tab moved out) — remove from context
+        database.update_window_state(source_cw_id, is_open=False, is_member=False)
+        database.deactivate_mappings_for_cw_id(source_cw_id)
+        logger.info("Source window removed from context (all tabs moved out)")
 
 
 async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> dict:
@@ -932,16 +961,7 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
                 await fresh_window.async_set_title(f"{context_name} / {window_name}")
         except Exception:
             pass
-        # Sync source window (tab was removed from it)
-        if source_cw_id:
-            app = await iterm2.async_get_app(app.connection)
-            source_iterm = app.get_window_by_id(source_iterm_window.window_id)
-            if source_iterm:
-                src_state = await read_iterm_window_state(source_iterm)
-                database.sync_window_layout(source_cw_id, src_state["tabs"])
-            else:
-                # Source window was closed (it was the only tab)
-                database.update_window_state(source_cw_id, is_open=False)
+        await _sync_source_after_move(source_cw_id, source_iterm_window, app, database)
 
         # Track last-focused window in target context
         _last_focused_window_per_context[context_name] = target_cw_window.id
@@ -968,15 +988,7 @@ async def _cmd_move_tab(args: dict, app: iterm2.App, database: CwDatabase) -> di
     window_state = await read_iterm_window_state(target_iterm_window)
     database.sync_window_layout(target_cw_window.id, window_state["tabs"])
 
-    # Sync source window (tab was removed from it)
-    if source_cw_id:
-        app = await iterm2.async_get_app(app.connection)
-        source_iterm = app.get_window_by_id(source_iterm_window.window_id)
-        if source_iterm:
-            src_state = await read_iterm_window_state(source_iterm)
-            database.sync_window_layout(source_cw_id, src_state["tabs"])
-        else:
-            database.update_window_state(source_cw_id, is_open=False)
+    await _sync_source_after_move(source_cw_id, source_iterm_window, app, database)
 
     # Track last-focused window in target context
     _last_focused_window_per_context[context_name] = target_cw_window.id
