@@ -92,21 +92,37 @@ def transliterate(text):
     return result
 
 def all_transliterations(text):
-    \"\"\"Generate all possible transliterations (handles ambiguous prefixes).
-    E.g. 'S' could be 'с' or start of 'sh'→'ш', 'sk' stays 'ск'.\"\"\"
-    results = set()
-    results.add(transliterate(text))
-    # Check if the end of text could be a prefix of a multi-char mapping
+    \"\"\"Generate all possible transliterations by considering digraph ambiguity
+    at EVERY position. E.g. 'Sk' → {'ск', 'шк'} because S could be sh→ш.\"\"\"
     t = text.lower()
-    for key in lat2cyr:
-        if len(key) > 1 and key.startswith(t[-1:]):
-            # Last char is start of digraph — add variant with that digraph's value
-            prefix_cyr = transliterate(t[:-1])
-            results.add(prefix_cyr + lat2cyr[key])
-        if len(key) > 2 and len(t) >= 2 and key.startswith(t[-2:]):
-            prefix_cyr = transliterate(t[:-2])
-            results.add(prefix_cyr + lat2cyr[key])
-    return results
+    if not t:
+        return {''}
+    # Recursive: for each position, branch if char could start a digraph
+    def _expand(pos):
+        if pos >= len(t):
+            return {''}
+        results = set()
+        ch = t[pos]
+        # Option 1: take single char as-is
+        rest = _expand(pos + 1)
+        mapped = lat2cyr.get(ch, ch)
+        for r in rest:
+            results.add(mapped + r)
+        # Option 2: char could be start of a digraph — treat it AS the digraph value
+        # E.g. 's' starts 'sh'→'ш', so 'sk' can also be read as 'шк'
+        for key in lat2cyr:
+            if len(key) > 1 and key[0] == ch and key != t[pos:pos+len(key)]:
+                # This char COULD mean the digraph's value (fuzzy)
+                rest2 = _expand(pos + 1)
+                for r in rest2:
+                    results.add(lat2cyr[key] + r)
+            if len(key) > 1 and pos + len(key) <= len(t) and t[pos:pos+len(key)] == key:
+                # Full digraph match
+                rest3 = _expand(pos + len(key))
+                for r in rest3:
+                    results.add(lat2cyr[key] + r)
+        return results
+    return _expand(0)
 
 q_lower = query.lower()
 q_variants = all_transliterations(query)
