@@ -32,11 +32,17 @@ View or update CW configuration.
 create
 Create a new Context.
 .TP
+current
+Show which Context the current window belongs to.
+.TP
 go
 Jump to a window (bring it to front).
 .TP
 history
 Show state history (snapshots) for a Context.
+.TP
+history\-pane
+Show per\-pane command history for the current pane.
 .TP
 join
 Add a window to an existing Context.
@@ -47,14 +53,23 @@ Remove a window from its Context.
 list
 Show all Contexts with their live status.
 .TP
+move
+Move the current tab to a Context/Window.
+.TP
 open
 Restore closed windows of a Context.
+.TP
+refresh
+Re\-apply CW user variables (badge, context/window...
 .TP
 reload
 Reload daemon code without restarting iTerm2.
 .TP
 rename
 Rename a Context or a Window within a Context.
+.TP
+restore\-backup
+Restore a Context (or Context/Window) from a backup...
 .TP
 save
 Force an explicit snapshot of a Context (or all Contexts).

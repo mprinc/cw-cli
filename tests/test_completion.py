@@ -48,8 +48,9 @@ class TestTransliteration:
         """All CLI commands must appear in completion scripts."""
         commands = [
             "list", "create", "join", "leave", "move", "open", "close",
-            "save", "history", "status", "windows", "go", "rename",
-            "current", "refresh", "reload", "backup", "config", "completion",
+            "save", "history", "history-pane", "status", "windows", "go",
+            "rename", "current", "refresh", "reload", "backup",
+            "restore-backup", "config", "completion",
         ]
         for shell in ["bash", "zsh", "fish"]:
             script = generate_completion(shell)
