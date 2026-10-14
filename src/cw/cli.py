@@ -1052,13 +1052,23 @@ def cmd_restore_backup(target: str, backup_path: str, yes: bool):
 
             # Copy tabs and panes
             for tab in w.tabs:
+                # Deactivate any mapping that references this tab UUID
+                # (prevents checkpoint from stealing it back to another window)
+                cursor.execute("UPDATE id_mappings SET is_active = 0 WHERE cw_id = ?", (tab.id,))
+                # Remove tab from any other window it may be in
+                cursor.execute("DELETE FROM tabs WHERE id = ?", (tab.id,))
+
                 t_row = backup_db.conn.execute("SELECT * FROM tabs WHERE id = ?", (tab.id,)).fetchone()
                 if t_row:
                     cols = [desc[0] for desc in backup_db.conn.execute("SELECT * FROM tabs LIMIT 0").description]
                     placeholders = ",".join(["?"] * len(cols))
-                    cursor.execute(f"INSERT OR REPLACE INTO tabs ({','.join(cols)}) VALUES ({placeholders})", tuple(t_row))
+                    cursor.execute(f"INSERT INTO tabs ({','.join(cols)}) VALUES ({placeholders})", tuple(t_row))
 
                 for pane in tab.panes:
+                    # Same: deactivate mapping, remove from other tabs
+                    cursor.execute("UPDATE id_mappings SET is_active = 0 WHERE cw_id = ?", (pane.id,))
+                    cursor.execute("DELETE FROM panes WHERE id = ?", (pane.id,))
+
                     p_row = backup_db.conn.execute("SELECT * FROM panes WHERE id = ?", (pane.id,)).fetchone()
                     if p_row:
                         cols = [desc[0] for desc in backup_db.conn.execute("SELECT * FROM panes LIMIT 0").description]
