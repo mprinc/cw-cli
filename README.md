@@ -104,6 +104,16 @@ iTerm → Settings → Profiles → General → Badge:
 
 Each pane will then show e.g. `MyProject / Development` as a background badge.
 
+## Quick access: Hotkey Window
+
+Set up a dedicated iTerm2 Hotkey Window so you can run `cw` commands from anywhere without switching tabs:
+
+1. **iTerm → Settings → Keys → Hotkey → Create a Dedicated Hotkey Window**
+2. Set hotkey to `⌘⇧C` (Cmd+Shift+C)
+3. Configure window style (e.g. "Floating", "Top of Screen")
+
+Now press `⌘⇧C` from any app → type `cw go MyProject` → press `⌘⇧C` again to dismiss.
+
 ## Documentation
 
 - [FEATURES.md](FEATURES.md) — feature overview

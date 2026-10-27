@@ -103,6 +103,16 @@ iTerm → Settings → Profiles → General → Badge:
 
 Сваки панел ће тада приказивати нпр. `МојПројекат / Development` као позадински badge.
 
+## Брзи приступ: Hotkey прозор
+
+Подеси iTerm2 Hotkey Window да можеш покренути `cw` команде из било које апликације без тражења слободног таба:
+
+1. **iTerm → Settings → Keys → Hotkey → Create a Dedicated Hotkey Window**
+2. Постави пречицу на `⌘⇧C` (Cmd+Shift+C)
+3. Подеси стил прозора (нпр. "Floating", "Top of Screen")
+
+Сад притисни `⌘⇧C` из било које апликације → куцај `cw go МојПројекат` → `⌘⇧C` поново да затвориш.
+
 ## Документација
 
 - [FEATURES.md](FEATURES.md) — преглед функционалности
