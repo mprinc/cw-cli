@@ -568,6 +568,8 @@ async def _cmd_reload(args: dict, app: iterm2.App, database: CwDatabase) -> dict
     # (importlib.reload creates a new class object; existing instances keep the old one)
     import cw.db as _db_module
     database.__class__ = _db_module.CwDatabase
+    # Run any pending migrations (e.g. new columns added in this reload)
+    database._run_migrations()
 
     # Build warnings for user
     warnings = []

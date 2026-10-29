@@ -153,6 +153,10 @@ class CwDatabase:
     def init_schema(self) -> None:
         """Create all tables and indexes if they don't exist."""
         self.conn.executescript(SCHEMA_SQL)
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        """Run any pending schema migrations (safe to call multiple times)."""
         # Migration: add is_active column to panes if missing
         try:
             self.conn.execute("SELECT is_active FROM panes LIMIT 1")
