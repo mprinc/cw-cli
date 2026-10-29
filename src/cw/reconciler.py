@@ -94,6 +94,11 @@ async def read_iterm_window_state(iterm_window: iterm2.Window) -> dict:
                 profile_name = await iterm_session.async_get_variable("profileName")
             except Exception:
                 profile_name = ""
+            try:
+                profile = await iterm_session.async_get_profile()
+                font = profile.normal_font or ""
+            except Exception:
+                font = ""
 
             panes_data.append({
                 "iterm_id": iterm_session.session_id,
@@ -102,6 +107,7 @@ async def read_iterm_window_state(iterm_window: iterm2.Window) -> dict:
                 "hostname": session_hostname or "",
                 "username": session_username or "",
                 "profile": profile_name or "",
+                "font": font,
                 "split_direction": None,
                 "relative_size": None,
                 "is_active": iterm_session.session_id == active_session_id,

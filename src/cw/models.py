@@ -38,6 +38,7 @@ class Pane:
     parent_pane_id: str | None = None
     split_direction: str | None = None
     profile: str = ""
+    font: str = ""
     title: str = ""
     cwd: str = ""
     hostname: str = ""

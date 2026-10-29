@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS panes (
     parent_pane_id  TEXT REFERENCES panes(id) ON DELETE SET NULL,
     split_direction TEXT,
     profile         TEXT NOT NULL DEFAULT '',
+    font            TEXT NOT NULL DEFAULT '',
     title           TEXT NOT NULL DEFAULT '',
     cwd             TEXT NOT NULL DEFAULT '',
     hostname        TEXT NOT NULL DEFAULT '',
@@ -157,6 +158,12 @@ class CwDatabase:
             self.conn.execute("SELECT is_active FROM panes LIMIT 1")
         except Exception:
             self.conn.execute("ALTER TABLE panes ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0")
+
+        # Migration: add font column to panes if missing
+        try:
+            self.conn.execute("SELECT font FROM panes LIMIT 1")
+        except Exception:
+            self.conn.execute("ALTER TABLE panes ADD COLUMN font TEXT NOT NULL DEFAULT ''")
 
     def close(self) -> None:
         """Close the database connection."""
@@ -314,18 +321,20 @@ class CwDatabase:
                     (tab.id,),
                 ).fetchall()
                 for pane_row in pane_rows:
+                    pane_keys = pane_row.keys()
                     tab.panes.append(Pane(
                         id=pane_row["id"],
                         tab_id=pane_row["tab_id"],
                         parent_pane_id=pane_row["parent_pane_id"],
                         split_direction=pane_row["split_direction"],
                         profile=pane_row["profile"],
+                        font=pane_row["font"] if "font" in pane_keys else "",
                         title=pane_row["title"],
                         cwd=pane_row["cwd"],
                         hostname=pane_row["hostname"],
                         username=pane_row["username"],
                         relative_size=pane_row["relative_size"],
-                        is_active=bool(pane_row["is_active"]) if "is_active" in pane_row.keys() else False,
+                        is_active=bool(pane_row["is_active"]) if "is_active" in pane_keys else False,
                     ))
                 window.tabs.append(tab)
             context.windows.append(window)
@@ -488,7 +497,7 @@ class CwDatabase:
         self, tab_id: str, *,
         parent_pane_id: str | None = None,
         split_direction: str | None = None,
-        profile: str = "", title: str = "",
+        profile: str = "", font: str = "", title: str = "",
         cwd: str = "", hostname: str = "", username: str = "",
         relative_size: float | None = None,
     ) -> Pane:
@@ -498,6 +507,7 @@ class CwDatabase:
         @param tab_id: CW UUID of the parent tab.
         @param parent_pane_id: Parent pane in split tree (None = root).
         @param split_direction: 'horizontal' or 'vertical'.
+        @param font: Session-level font (e.g. "MesloLGS-NF-Regular 13").
         @param cwd: Current working directory of the pane.
         @returns: The newly created Pane.
         """
@@ -507,17 +517,17 @@ class CwDatabase:
             cursor.execute(
                 """INSERT INTO panes
                    (id, tab_id, parent_pane_id, split_direction,
-                    profile, title, cwd, hostname, username,
+                    profile, font, title, cwd, hostname, username,
                     relative_size, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (pane_id, tab_id, parent_pane_id, split_direction,
-                 profile, title, cwd, hostname, username,
+                 profile, font, title, cwd, hostname, username,
                  relative_size, now),
             )
         return Pane(
             id=pane_id, tab_id=tab_id,
             parent_pane_id=parent_pane_id, split_direction=split_direction,
-            profile=profile, title=title, cwd=cwd,
+            profile=profile, font=font, title=title, cwd=cwd,
             hostname=hostname, username=username, relative_size=relative_size,
         )
 
@@ -774,13 +784,14 @@ class CwDatabase:
                     cursor.execute(
                         """INSERT INTO panes
                            (id, tab_id, parent_pane_id, split_direction,
-                            profile, title, cwd, hostname, username,
+                            profile, font, title, cwd, hostname, username,
                             relative_size, is_active, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (pane_id, tab_id,
                          pane_data.get("parent_pane_id"),
                          pane_data.get("split_direction"),
                          pane_data.get("profile", ""),
+                         pane_data.get("font", ""),
                          pane_data.get("title", ""),
                          pane_data.get("cwd", ""),
                          pane_data.get("hostname", ""),

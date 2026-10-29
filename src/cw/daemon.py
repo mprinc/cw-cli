@@ -1918,7 +1918,7 @@ async def _restore_window(
     if not new_window:
         return None
 
-    # Helper to set up a restored session (CWD, name, title)
+    # Helper to set up a restored session (CWD, name, title, font)
     async def _setup_session(session: iterm2.Session, pane_data):
         if pane_data.cwd:
             await session.async_send_text(f"cd {_shell_escape(pane_data.cwd)}\n")
@@ -1927,6 +1927,12 @@ async def _restore_window(
                 await session.async_set_name(pane_data.title)
             except Exception:
                 pass
+        if pane_data.font:
+            try:
+                profile = await session.async_get_profile()
+                await profile.async_set_normal_font(pane_data.font)
+            except Exception:
+                logger.debug("Failed to restore font '%s'", pane_data.font)
         # HISTFILE is set by _cmd_open after sync_window_layout
 
     # Set up the first pane
