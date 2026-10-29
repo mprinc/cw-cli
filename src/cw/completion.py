@@ -72,6 +72,19 @@ lat2cyr = {
     # 3-char combos (must be checked before 2-char)
     'dzh':'џ',
 }
+    # Cyrillic → Latin mapping (Serbian)
+cyr2lat = {
+    'а':'a','б':'b','в':'v','г':'g','д':'d','ђ':'đ','е':'e','ж':'ž',
+    'з':'z','и':'i','ј':'j','к':'k','л':'l','љ':'lj','м':'m','н':'n',
+    'њ':'nj','о':'o','п':'p','р':'r','с':'s','т':'t','ћ':'ć','у':'u',
+    'ф':'f','х':'h','ц':'c','ч':'č','џ':'dž','ш':'š',
+}
+def transliterate_cyr2lat(text):
+    result = ''
+    for ch in text.lower():
+        result += cyr2lat.get(ch, ch)
+    return result
+
 def transliterate(text):
     result = ''
     i = 0
@@ -126,15 +139,28 @@ def all_transliterations(text):
 
 q_lower = query.lower()
 q_variants = all_transliterations(query)
+q_lat = transliterate_cyr2lat(query)  # Cyrillic query → Latin
 for c in candidates:
     c_lower = c.lower()
+    c_lat = transliterate_cyr2lat(c)  # Cyrillic candidate → Latin
     if c_lower.startswith(q_lower):
         print(c)
         continue
+    # Latin query → Cyrillic candidate
+    matched = False
     for variant in q_variants:
         if c_lower.startswith(variant):
             print(c)
+            matched = True
             break
+    if matched:
+        continue
+    # Cyrillic query → Latin candidate
+    if c_lat.startswith(q_lat):
+        print(c)
+        continue
+    if c_lower.startswith(q_lat):
+        print(c)
 " "$query" "$@" 2>/dev/null
     }
 
