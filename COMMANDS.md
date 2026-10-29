@@ -1,4 +1,4 @@
-Synced with commit: dbf35d5
+Synced with commit: 17d5a03
 
 # CW Command Reference
 
@@ -114,6 +114,7 @@ What gets restored:
 - Tab structure and tab titles
 - Pane splits and session names
 - Working directories (via `cd`)
+- Per-session font size (even if different from profile default)
 
 What does NOT auto-run:
 - Previous commands (for safety). The last CWD is restored so you can restart manually.
@@ -147,7 +148,7 @@ cw save MyProject     # Snapshot one Context
 cw save               # Snapshot all Contexts
 ```
 
-The daemon also saves state automatically on every layout change and periodically (every 30 seconds).
+The daemon also saves state automatically on every layout change and periodically (every 5 seconds).
 
 ---
 
@@ -254,7 +255,7 @@ cw move MyProject/Dev              # Move tab to existing or new window
 cw move NewProject/Main            # Creates context + window if needed
 ```
 
-If the target window is open, the tab is moved into it. If it doesn't exist, a new window is created from the tab.
+If the target window is open, the tab is moved into it. If it doesn't exist, a new window is created from the tab. The source window is automatically synced after the move — if the last tab was moved out, the source window is removed from its Context.
 
 ---
 
@@ -310,7 +311,7 @@ Reload the daemon's Python modules so code changes take effect without restartin
 cw reload
 ```
 
-If new source files were added (not just modified), the reload will warn that an iTerm restart is needed for those specific modules.
+If new source files were added (not just modified), the reload will warn that an iTerm restart is needed for those specific modules. Reload also runs pending DB migrations (e.g. new columns are available immediately).
 
 ```
 ✓ Daemon reloaded (5 modules)
@@ -338,7 +339,7 @@ Output when running:
 
 ## `cw backup`
 
-Backup the CW database to a timestamped subfolder. Uses the SQLite backup API for a consistent copy (safe even while daemon is writing).
+Backup the CW database to a ZIP archive. Uses the SQLite backup API for a consistent copy (safe even while daemon is writing). ZIP compression reduces size ~3x.
 
 ```bash
 cw backup                                  # Use configured backup dir
@@ -348,17 +349,11 @@ cw backup --target ~/Documents/CW-Backups  # Override destination
 Options:
 - `-t`, `--target PATH` — backup directory (default: configured dir or `~/.contextual-walker/backups/`)
 
-Each backup creates a timestamped folder:
+Each backup creates a timestamped ZIP file:
 ```
 ~/.contextual-walker/backups/
-  2026-10-07_18-14-32/
-    cw.sqlite
-    config.json
-    daemon.log
-  2026-10-08_09-00-15/
-    cw.sqlite
-    config.json
-    daemon.log
+  2026-10-07_18-14-32.zip    # contains: cw.sqlite, config.json, history/
+  2026-10-08_09-00-15.zip
 ```
 
 The uninstall script calls `cw backup` automatically before removing anything.
@@ -370,16 +365,16 @@ The uninstall script calls `cw backup` automatically before removing anything.
 Restore a Context or Window from a backup database. Replaces current state with data from the backup.
 
 ```bash
-cw restore-backup Дружба --from ~/.contextual-walker/backups/2026-10-13_20-28-14
+cw restore-backup Дружба --from ~/.contextual-walker/backups/2026-10-29_19-00-00.zip
 cw restore-backup Дружба/Школа --from /path/to/cw.sqlite
-cw restore-backup Дружба --from /path/to/backup -y    # skip confirmation
+cw restore-backup Дружба --from /path/to/backup-folder -y    # skip confirmation
 ```
 
 Options:
-- `--from PATH` — path to backup folder or `cw.sqlite` file (required)
+- `--from PATH` — path to `.zip` archive, backup folder, or `cw.sqlite` file (required)
 - `-y`, `--yes` — skip confirmation
 
-Shows what will be restored before asking. Deactivates conflicting mappings to survive daemon checkpoints.
+Shows what will be restored before asking. Deactivates conflicting mappings to survive daemon checkpoints. Also restores per-pane history files for the restored panes.
 
 ---
 
@@ -423,8 +418,9 @@ cw open MyProject/<TAB>         → Development, Infrastructure, ...
 cw close LitTerra/Dr<TAB>       → LitTerra/ДРУЖБА
 ```
 
-Completion is **case-insensitive** and supports **Latin→Cyrillic transliteration** with fuzzy digraph matching:
-- `Dr` matches `ДРУЖБА`
+Completion is **case-insensitive** and supports **bidirectional Latin ↔ Cyrillic transliteration** with fuzzy digraph matching:
+- `Dr` matches `ДРУЖБА` (Latin → Cyrillic)
+- `Лит` matches `LitTerra` (Cyrillic → Latin)
 - `Sk` matches `Школа` (S could be Sh→Ш)
 - `D` matches `Дружба`, `Ђорђе`, `Џеп` (D could be Dj→Ђ or Dz→Џ)
 - Baby latinica: `sh`→ш, `ch`→ч, `dzh`→џ, `cj`→ћ

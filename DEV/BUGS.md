@@ -1,4 +1,4 @@
-Synced with commit: dbf35d5
+Synced with commit: 17d5a03
 
 # Known Bugs & Fixes
 
@@ -147,10 +147,11 @@ States: `NEW` → `UNDERSTOOD` → `IN-PROGRESS` → `SOLVED`
 
 3. **Module-level state**: `_last_focused_context`, `_last_focused_window_per_context`, `_last_sync_time` are reset on reload, losing focus tracking state.
 
-**Lesson:** `cw reload` is useful for command handler changes (join, open, close, etc.) but NOT for changes to:
+**Additional fix** (`17d5a03`): `_cmd_reload` now calls `database._run_migrations()` after updating `database.__class__`. New DB columns (e.g. `font`) are available immediately without iTerm restart.
+
+**Lesson:** `cw reload` is useful for command handler changes (join, open, close, etc.) and DB schema migrations, but NOT for changes to:
 - Monitor coroutines (layout, focus, session, checkpoint)
 - Module-level state
-- Database schema or `init_schema`
 - `_set_pane_histfile` or `_ensure_all_sessions_have_histfile` (startup-only)
 
 For these, iTerm restart is required.
@@ -177,3 +178,33 @@ For these, iTerm restart is required.
 **Final fix:** `set_mapping` now deactivates by BOTH `cw_id` AND `iterm_id` (`57b7709`). This prevents NewSessionMonitor from stealing the UUID during restore. E2e test `test_destructive.sh` verifies marker command preserved across close/open.
 
 **Verification:** Unit tests `test_sync_preserves_existing_pane_uuids` and `test_sync_preserves_uuid_after_pre_mapping` pass.
+
+---
+
+### BUG-010: `cw move` doesn't sync source window
+
+**Status:** SOLVED  
+**Discovered:** 2026-10-29  
+**Severity:** High — tab appears in both source and target contexts  
+**Fixed in:** `c8de346`, `c09f3d2`
+
+**Reproduction:** `cw move LitTerra/TalkingBooks` — tab moves in iTerm but source window's DB still shows the old tab.
+
+**Problem:** `_cmd_move_tab` only synced the target window after move. Source window DB state was never updated.
+
+**Fix:** Added `_sync_source_after_move` helper that re-syncs source window. If source iTerm window no longer exists (last tab moved out), marks window as `is_member=False` and deactivates mappings. Also updates `_last_focused_window_per_context` for the target context.
+
+---
+
+### BUG-011: `cw leave` crashes on window without iTerm window
+
+**Status:** SOLVED  
+**Discovered:** 2026-10-29  
+**Severity:** Medium — command fails with NoneType error  
+**Fixed in:** `c09f3d2`
+
+**Reproduction:** `cw leave Дружба/TalkingBooks` when TalkingBooks has no iTerm window (tabs already moved). Error: `'NoneType' object has no attribute 'tabs'`
+
+**Problem:** `_cmd_leave` iterated `iterm_window.tabs` without checking if `iterm_window` is None (happens when window exists in DB but has no iTerm mapping).
+
+**Fix:** Early return if `iterm_window is None` — still removes membership and deactivates mappings, just skips clearing user variables.

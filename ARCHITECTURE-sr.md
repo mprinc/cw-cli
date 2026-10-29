@@ -1,4 +1,4 @@
-Synced with commit: dbf35d5
+Synced with commit: 17d5a03
 
 # CW Архитектура
 
@@ -54,7 +54,7 @@ Synced with commit: dbf35d5
 - HISTFILE setup за СВЕ сесије при покретању (tracked и untracked)
 - Unix socket сервер за CLI команде
 - Прати задњи фокусирани прозор по контексту (за `cw go`)
-- Hot-reload модула (`cw reload`) са `database.__class__` ажурирањем
+- Hot-reload модула (`cw reload`) са `database.__class__` ажурирањем + DB миграције при reload-у
 
 **Безбједност:** Сваки event handler је у `try/except`. Ако daemon падне, iTerm наставља нормално.
 
@@ -77,7 +77,7 @@ Canonical source of truth за контексте, прозоре, табове,
 | `contexts` | Именоване групе прозора (id, name, description, is_deleted) |
 | `windows` | Прозори у контексту (is_member, is_open, геометрија) |
 | `tabs` | Табови у прозору (title, order, is_selected) |
-| `panes` | Панели у табу (CWD, hostname, profile, split tree, is_active) |
+| `panes` | Панели у табу (CWD, hostname, profile, font, split tree, is_active) |
 | `id_mappings` | CW UUID ↔ iTerm runtime ID (двосмјерно деактивирање) |
 | `state_log` | Историјски snapshot-ови (JSON) |
 
@@ -194,7 +194,7 @@ PURGE   → физичко брисање (V2)
 1. Прочитај стање из DB (табови, панели, CWD-ови)
 2. Креирај нови iTerm прозор
 3. За сваки таб: креирај таб, постави наслов
-4. За сваки панел: креирај сесију, cd у CWD, постави име
+4. За сваки панел: креирај сесију, cd у CWD, постави име, врати font
 5. Pre-create mapping: СТАРИ_PANE_UUID → НОВИ_SESSION_ID
    (ПРИЈЕ sync-а! Иначе NewSessionMonitor може украсти UUID)
 6. sync_window_layout — налази mapping → задржава стари UUID
@@ -206,6 +206,7 @@ PURGE   → физичко брисање (V2)
 
 `importlib.reload` ажурира модуле, али:
 - `database.__class__` мора бити ручно ажуриран (инстанца задржава стару класу)
+- `_run_migrations()` се позива при reload-у (нове колоне одмах доступне)
 - `_dispatch_command` се тражи динамички: `getattr(_self_module, '_dispatch_command')`
 - Покренуте coroutine-е (монитори, checkpoint) НЕ могу бити ажуриране — захтијевају рестарт iTerm-а
 - Module-level state (`_last_focused_context`, `_last_sync_time`) се ресетује при reload-у
@@ -217,16 +218,14 @@ PURGE   → физичко брисање (V2)
 ├── cw.sqlite                  # SQLite база (WAL mode)
 ├── cw.sock                    # Unix socket (daemon ↔ CLI)
 ├── config.json                # Конфигурација (backup dir, history max)
-├── daemon.log                 # Логови daemon-а
+├── daemon.log                 # Логови daemon-а (RotatingFileHandler, макс 50MB, 2 бекапа)
+├── daemon.log.1               # Ротирани лог
+├── daemon.log.2               # Ротирани лог
 ├── history/                   # Per-pane shell history фајлови
 │   ├── 8b13e840-..-.history.txt
 │   └── ...
-└── backups/                   # Бекапови (timestamped подфолдери)
-    └── 2026-10-08_09-00-15/
-        ├── cw.sqlite
-        ├── config.json
-        ├── daemon.log
-        └── history/           # Копија историјских фајлова
+└── backups/                   # Бекапови (ZIP архиве, ~3x мањи)
+    └── 2026-10-08_09-00-15.zip  # садржи: cw.sqlite, config.json, history/
 ```
 
 ## Пројектна структура

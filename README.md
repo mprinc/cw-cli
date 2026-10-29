@@ -1,4 +1,4 @@
-Synced with commit: dbf35d5
+Synced with commit: 17d5a03
 
 # Contextual-Walker
 
@@ -64,8 +64,8 @@ cw open MyProject             # Restore everything
 cw save                       # Force a snapshot
 cw history MyProject          # View snapshots
 cw history-pane               # Per-pane command history (↑ arrow)
-cw backup                     # Backup database
-cw restore-backup Ctx --from ~/.contextual-walker/backups/2026-10-13
+cw backup                     # Backup database (ZIP)
+cw restore-backup Ctx --from ~/.contextual-walker/backups/2026-10-13.zip
 cw refresh                    # Re-apply badges and window titles
 cw reload                     # Reload daemon code (no iTerm restart)
 ```
@@ -91,7 +91,7 @@ source .venv/bin/activate
 python -m pytest tests/ -v
 ```
 
-47 tests covering: DB CRUD, models, CLI helpers, shell completion, config, DB migration.
+74 unit tests covering: DB CRUD, models, CLI helpers, shell completion, config, DB migration, daemon commands.
 
 ## Show Context name in iTerm panes
 
